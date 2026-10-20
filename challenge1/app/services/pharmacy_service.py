@@ -48,18 +48,18 @@ class PharmacyService:
         lng: Optional[float] = None, 
         city: Optional[str] = None,
         garde_only: bool = False,
-        limit: int = 10
+        limit: int = 10,
+        max_radius_km: float = 35.0
     ) -> List[Dict]:
         """
-        Recherche les pharmacies les plus proches avec support de filtrage par garde et ville.
+        Recherche les pharmacies strictement les plus proches de la position demandée.
+        Priorise d'abord la proximité géographique (< 35km), puis met en avant les gardes.
         """
-        results = []
+        pool = self.pharmacies
 
         # Filtrage par ville si spécifié
-        pool = self.pharmacies
         if city:
             norm_city = normalize_query(city)
-            # Trouver la ville la plus proche dans l'index
             matching_cities = [c for c in self.pharmacies_by_city.keys() if norm_city in c or c in norm_city]
             if matching_cities:
                 pool = []
@@ -70,10 +70,18 @@ class PharmacyService:
         if garde_only:
             pool = [p for p in pool if p.get("garde")]
 
-        # Si coordonnées disponibles, calculer les distances et trier
-        origin_lat = lat if lat is not None else (pool[0]["lat"] if pool else DEFAULT_LAT)
-        origin_lng = lng if lng is not None else (pool[0]["lng"] if pool else DEFAULT_LNG)
+        # Détermination du point d'origine
+        if lat is not None and lng is not None:
+            origin_lat = lat
+            origin_lng = lng
+        elif city and pool:
+            origin_lat = pool[0].get("lat", DEFAULT_LAT)
+            origin_lng = pool[0].get("lng", DEFAULT_LNG)
+        else:
+            origin_lat = DEFAULT_LAT
+            origin_lng = DEFAULT_LNG
 
+        results = []
         for p in pool:
             p_copy = p.copy()
             plat = p.get("lat")
@@ -85,10 +93,17 @@ class PharmacyService:
                 p_copy["distance_km"] = 999.0
             results.append(p_copy)
 
-        # Trier par présence de garde d'abord (priorité) puis par distance
-        results.sort(key=lambda x: (0 if x.get("garde") else 1, x.get("distance_km", 999.0)))
+        # Trier STRICTEMENT par distance d'abord pour garantir la proximité
+        results.sort(key=lambda x: x.get("distance_km", 999.0))
+
+        # Si l'utilisateur est à proximité, filtrer dans un rayon raisonnable (max_radius_km)
+        close_results = [r for r in results if r["distance_km"] <= max_radius_km]
+        if close_results:
+            # Parmi les officines proches (dans la même agglomération), valoriser les gardes
+            close_results.sort(key=lambda x: (0 if x.get("garde") else 1, x["distance_km"]))
+            return close_results[:limit]
+
         return results[:limit]
 
 # Instance singleton partagée
 pharmacy_service = PharmacyService()
-

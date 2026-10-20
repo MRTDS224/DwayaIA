@@ -4,6 +4,7 @@ let currentLat = 33.5731; // Casablanca par défaut
 let currentLng = -7.5898;
 let map = null;
 let markersLayer = null;
+let userMarker = null;
 
 // Initialisation de la carte Leaflet
 function initMap() {
@@ -16,15 +17,29 @@ function initMap() {
 
     markersLayer = L.layerGroup().addTo(map);
 
-    // Marqueur de l'utilisateur
-    L.circleMarker([currentLat, currentLng], {
-        radius: 7,
-        fillColor: "#0284c7",
+    // Marqueur de l'utilisateur (Point Bleu Pulsant)
+    updateUserPositionMarker(currentLat, currentLng, "Position approximative (Casablanca)");
+}
+
+// Mise à jour du marqueur de position de l'utilisateur
+function updateUserPositionMarker(lat, lng, popupText = "Votre position") {
+    if (!map) return;
+    
+    currentLat = lat;
+    currentLng = lng;
+
+    if (userMarker) {
+        map.removeLayer(userMarker);
+    }
+
+    userMarker = L.circleMarker([lat, lng], {
+        radius: 8,
+        fillColor: "#2563eb", // Bleu vif
         color: "#ffffff",
-        weight: 2,
+        weight: 3,
         opacity: 1,
-        fillOpacity: 0.9
-    }).addTo(map).bindPopup("<b>Votre position</b>");
+        fillOpacity: 1
+    }).addTo(map).bindPopup(`<b>📍 ${popupText}</b>`);
 }
 
 // Mettre à jour les marqueurs des pharmacies sur la carte
@@ -33,15 +48,16 @@ function updateMapMarkers(pharmacies, centerLat, centerLng) {
 
     markersLayer.clearLayers();
 
-    if (centerLat && centerLng) {
-        map.setView([centerLat, centerLng], 13);
-    }
+    // S'assurer que le marqueur utilisateur reste présent et visible
+    updateUserPositionMarker(currentLat, currentLng, "Votre position");
+
+    const bounds = L.latLngBounds([[currentLat, currentLng]]);
 
     pharmacies.forEach(p => {
         if (!p.lat || !p.lng) return;
 
         const isGarde = Boolean(p.garde);
-        const markerColor = isGarde ? "#16a34a" : "#0d9488"; // Vert si garde, Teal sinon
+        const markerColor = isGarde ? "#16a34a" : "#0d9488";
 
         const marker = L.circleMarker([p.lat, p.lng], {
             radius: isGarde ? 9 : 7,
@@ -49,64 +65,87 @@ function updateMapMarkers(pharmacies, centerLat, centerLng) {
             color: "#ffffff",
             weight: 2,
             opacity: 1,
-            fillOpacity: 0.9
+            fillOpacity: 0.95
         });
 
         const popupContent = `
             <div style="font-size: 12px; line-height: 1.4;">
                 <b style="color: ${markerColor};">${p.title}</b><br/>
-                ${isGarde ? '<span style="background: #dcfce7; color: #166534; font-weight: bold; padding: 2px 4px; border-radius: 4px; font-size: 10px;">GARDE 24H</span><br/>' : ''}
+                ${isGarde ? '<span style="background: #dcfce7; color: #166534; font-weight: bold; padding: 2px 4px; border-radius: 4px; font-size: 10px;">GARDE ACTIVE</span><br/>' : ''}
                 ${p.address || p.ville}<br/>
                 📞 ${p.phone || 'Non renseigné'}<br/>
-                <a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" style="color: #0284c7; text-decoration: underline; font-weight: 500;">Ouvrir dans Google Maps</a>
+                <span style="color: #64748b;">Distance: ${p.distance_km ? p.distance_km + ' km' : 'Proche'}</span><br/>
+                <a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" style="color: #0284c7; text-decoration: underline; font-weight: 500;">Itinéraire GPS</a>
             </div>
         `;
 
         marker.bindPopup(popupContent);
         markersLayer.addLayer(marker);
+        bounds.extend([p.lat, p.lng]);
     });
+
+    // Ajuster le zoom pour englober l'utilisateur et les pharmacies
+    if (pharmacies.length > 0) {
+        map.fitBounds(bounds, { padding: [25, 25], maxZoom: 14 });
+    }
 }
 
-// Fonction de Synthèse Vocale (Text-To-Speech)
-function speakText(text) {
+// Fonction de Synthèse Vocale (Text-To-Speech) robuste
+function speakText(encodedOrRawText) {
     if (!('speechSynthesis' in window)) {
         alert("La synthèse vocale n'est pas supportée par votre navigateur.");
         return;
     }
 
-    window.speechSynthesis.cancel(); // Arrêter toute lecture précédente
+    try {
+        window.speechSynthesis.cancel(); // Arrêter toute lecture en cours
 
-    // Nettoyer le texte du markdown
-    const cleanText = text
-        .replace(/[*_#`]/g, '')
-        .replace(/💡|💊|🔄|📍|🌙|📞|⚠️/g, '')
-        .trim();
+        // Décoder si passé encodé
+        let raw = encodedOrRawText;
+        try {
+            raw = decodeURIComponent(encodedOrRawText);
+        } catch (e) {
+            raw = encodedOrRawText;
+        }
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    
-    // Détecter si le texte contient principalement de l'arabe
-    const isArabic = /[\u0600-\u06FF]/.test(cleanText);
-    utterance.lang = isArabic ? 'ar-XA' : 'fr-FR';
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
+        // Nettoyage des balises Markdown et emojis
+        const cleanText = raw
+            .replace(/[*_#`]/g, '')
+            .replace(/💡|💊|🔄|📍|🌙|📞|⚠️|💰|🚨/g, '')
+            .trim();
 
-    window.speechSynthesis.speak(utterance);
+        if (!cleanText) return;
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        
+        // Détecter si la réponse contient de l'arabe
+        const isArabic = /[\u0600-\u06FF]/.test(cleanText);
+        utterance.lang = isArabic ? 'ar-XA' : 'fr-FR';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        window.speechSynthesis.speak(utterance);
+    } catch (err) {
+        console.error("Erreur de synthèse vocale :", err);
+    }
 }
 
-// Géolocalisation Utilisateur
+// Tenter de récupérer la position GPS exacte de l'utilisateur
 if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
         (pos) => {
             currentLat = pos.coords.latitude;
             currentLng = pos.coords.longitude;
             document.getElementById('user-city').innerText = `GPS (${currentLat.toFixed(2)}, ${currentLng.toFixed(2)})`;
+            updateUserPositionMarker(currentLat, currentLng, "Votre position GPS");
             if (map) {
                 map.setView([currentLat, currentLng], 13);
             }
         },
-        () => {
-            console.log("Géolocalisation par défaut (Casablanca).");
-        }
+        (err) => {
+            console.log("Position par défaut (Casablanca). Erreur GPS :", err.message);
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
     );
 }
 
@@ -114,6 +153,9 @@ const chatMessages = document.getElementById('chat-messages');
 const chatForm = document.getElementById('chat-form');
 const userInput = document.getElementById('user-input');
 const voiceBtn = document.getElementById('voice-btn');
+
+// Stockage sécurisé des textes à lire pour éviter les erreurs d'apostrophes dans onclick
+const speechTexts = {};
 
 function appendMessage(sender, htmlContent, isUser = false, rawTextToSpeak = null) {
     const msgDiv = document.createElement('div');
@@ -129,8 +171,13 @@ function appendMessage(sender, htmlContent, isUser = false, rawTextToSpeak = nul
             </div>
         `;
     } else {
+        const speechId = 'speech-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+        if (rawTextToSpeak) {
+            speechTexts[speechId] = rawTextToSpeak;
+        }
+
         const audioBtn = rawTextToSpeak ? `
-            <button onclick="speakText('${encodeURIComponent(rawTextToSpeak)}')" class="text-slate-400 hover:text-teal-600 p-1 float-right" title="Écouter la réponse vocale">
+            <button onclick="playStoredSpeech('${speechId}')" class="text-slate-400 hover:text-teal-600 p-1 float-right" title="Écouter la réponse">
                 <i class="fa-solid fa-volume-high text-xs"></i>
             </button>
         ` : '';
@@ -148,6 +195,13 @@ function appendMessage(sender, htmlContent, isUser = false, rawTextToSpeak = nul
 
     chatMessages.appendChild(msgDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function playStoredSpeech(speechId) {
+    const text = speechTexts[speechId];
+    if (text) {
+        speakText(text);
+    }
 }
 
 function updateInspector(data) {
@@ -170,10 +224,10 @@ function updateInspector(data) {
     const entBox = document.getElementById('inspector-entities');
     const ents = data.entities || {};
     let entHtml = '';
-    if (ents.medication) entHtml += `<div><span class="text-slate-400">Marque:</span> <span class="bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded">${ents.medication}</span></div>`;
+    if (ents.medication) entHtml += `<div><span class="text-slate-400">Marque:</span> <span class="bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded font-bold">${ents.medication}</span></div>`;
     if (ents.dosage_val) entHtml += `<div><span class="text-slate-400">Dosage:</span> <span class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">${ents.dosage_val} ${ents.dosage_unit || ''}</span></div>`;
     if (ents.galenic_form) entHtml += `<div><span class="text-slate-400">Forme:</span> <span class="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">${ents.galenic_form}</span></div>`;
-    if (ents.location) entHtml += `<div><span class="text-slate-400">Ville:</span> <span class="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded">${ents.location}</span></div>`;
+    if (ents.location) entHtml += `<div><span class="text-slate-400">Ville:</span> <span class="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-bold">📍 ${ents.location}</span></div>`;
     entBox.innerHTML = entHtml || '<p class="text-slate-400 italic">Aucune entité extraite</p>';
 
     // 3. Médicament CNOPS
@@ -192,7 +246,7 @@ function updateInspector(data) {
         drugBox.innerHTML = '<p class="text-slate-400 italic">Aucun médicament apparié</p>';
     }
 
-    // 4. Mettre à jour la carte avec les pharmacies retournées
+    // 4. Mettre à jour la carte avec la position et les pharmacies
     if (data.pharmacies && data.pharmacies.length > 0) {
         const first = data.pharmacies[0];
         updateMapMarkers(data.pharmacies, first.lat, first.lng);
@@ -280,11 +334,12 @@ async function sendMessage(text) {
                     <div class="p-2.5 bg-white border ${isGarde ? 'border-green-300 ring-1 ring-green-200' : 'border-slate-200'} rounded-lg text-xs">
                         <div class="flex justify-between items-center">
                             <span class="font-bold text-slate-800">${p.title}</span>
-                            ${isGarde ? '<span class="bg-green-100 text-green-800 font-bold px-1.5 py-0.5 rounded text-[10px]"><i class="fa-solid fa-moon mr-1"></i>GARDE 24H</span>' : ''}
+                            ${isGarde ? '<span class="bg-green-100 text-green-800 font-bold px-1.5 py-0.5 rounded text-[10px]"><i class="fa-solid fa-moon mr-1"></i>GARDE ACTIVE</span>' : ''}
                         </div>
                         <div class="text-slate-500 text-[11px] mt-0.5">${p.address || p.ville}</div>
                         <div class="flex justify-between items-center mt-1 text-[11px] text-slate-600">
                             <span><i class="fa-solid fa-phone text-slate-400 mr-1"></i>${p.phone || 'Non renseigné'}</span>
+                            <span class="text-slate-500 font-mono">${p.distance_km ? p.distance_km + ' km' : p.ville}</span>
                             <a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" class="text-teal-600 hover:underline">
                                 <i class="fa-solid fa-diamond-turn-right mr-1"></i>Itinéraire
                             </a>
@@ -321,17 +376,23 @@ chatForm.addEventListener('submit', (e) => {
     sendMessage(userInput.value);
 });
 
-// Reconnaissance vocale (SpeechRecognition)
-if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRec();
-    recognition.lang = 'ar-MA';
+// Reconnaissance vocale (SpeechRecognition) robuste
+let recognition = null;
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRec) {
+    recognition = new SpeechRec();
+    recognition.lang = 'fr-FR'; // Langue de reconnaissance par défaut
     recognition.continuous = false;
     recognition.interimResults = false;
 
+    let isRecording = false;
+
     recognition.onstart = () => {
-        voiceBtn.classList.add('text-red-600', 'animate-pulse');
-        userInput.placeholder = "Écoute en cours... Parlez en Darija ou Français...";
+        isRecording = true;
+        voiceBtn.classList.remove('text-slate-500');
+        voiceBtn.classList.add('text-red-600', 'bg-red-50', 'animate-pulse');
+        userInput.placeholder = "🔴 Écoute en cours... Parlez maintenant...";
     };
 
     recognition.onresult = (event) => {
@@ -340,22 +401,34 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         sendMessage(transcript);
     };
 
-    recognition.onerror = () => {
-        voiceBtn.classList.remove('text-red-600', 'animate-pulse');
-        userInput.placeholder = "Écrivez votre message en Darija, Arabizi ou Français...";
+    recognition.onerror = (event) => {
+        console.warn("Erreur reconnaissance vocale :", event.error);
+        if (event.error === 'not-allowed') {
+            alert("Accès au microphone refusé. Veuillez autoriser le micro dans les paramètres de votre navigateur.");
+        }
     };
 
     recognition.onend = () => {
-        voiceBtn.classList.remove('text-red-600', 'animate-pulse');
+        isRecording = false;
+        voiceBtn.classList.remove('text-red-600', 'bg-red-50', 'animate-pulse');
+        voiceBtn.classList.add('text-slate-500');
         userInput.placeholder = "Écrivez votre message en Darija, Arabizi ou Français...";
     };
 
     voiceBtn.addEventListener('click', () => {
-        try {
-            recognition.start();
-        } catch (e) {
+        if (!isRecording) {
+            try {
+                recognition.start();
+            } catch (e) {
+                console.error("Impossible de démarrer la reconnaissance vocale :", e);
+            }
+        } else {
             recognition.stop();
         }
+    });
+} else {
+    voiceBtn.addEventListener('click', () => {
+        alert("La reconnaissance vocale via navigateur nécessite un navigateur compatible (Chrome, Edge, Safari) et un accès microphone autorisé.");
     });
 }
 
