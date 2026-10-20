@@ -1,4 +1,4 @@
-// Logique Frontend pour Saydalia Bot avec Carte Leaflet et Synthèse Vocale (TTS)
+// Logique Frontend pour Saydalia Bot avec Carte Leaflet, TTS Haute Fidélité et Micro Universel
 
 let currentLat = 33.5731; // Casablanca par défaut
 let currentLng = -7.5898;
@@ -17,8 +17,7 @@ function initMap() {
 
     markersLayer = L.layerGroup().addTo(map);
 
-    // Marqueur de l'utilisateur (Point Bleu Pulsant)
-    updateUserPositionMarker(currentLat, currentLng, "Position approximative (Casablanca)");
+    updateUserPositionMarker(currentLat, currentLng, "Position par défaut (Casablanca)");
 }
 
 // Mise à jour du marqueur de position de l'utilisateur
@@ -84,53 +83,51 @@ function updateMapMarkers(pharmacies, centerLat, centerLng) {
         bounds.extend([p.lat, p.lng]);
     });
 
-    // Ajuster le zoom pour englober l'utilisateur et les pharmacies
     if (pharmacies.length > 0) {
         map.fitBounds(bounds, { padding: [25, 25], maxZoom: 14 });
     }
 }
 
-// Fonction de Synthèse Vocale (Text-To-Speech) robuste
-function speakText(encodedOrRawText) {
-    if (!('speechSynthesis' in window)) {
-        alert("La synthèse vocale n'est pas supportée par votre navigateur.");
-        return;
+// ----------------------------------------------------------------------------------
+// Synthèse Vocale (TTS) Haute Qualité via l'API Backend gTTS
+// ----------------------------------------------------------------------------------
+let currentAudioPlayer = null;
+
+async function playSpeechTTS(text) {
+    if (!text || !text.trim()) return;
+
+    if (currentAudioPlayer) {
+        currentAudioPlayer.pause();
+        currentAudioPlayer = null;
     }
 
     try {
-        window.speechSynthesis.cancel(); // Arrêter toute lecture en cours
+        const response = await fetch('/api/audio/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text })
+        });
 
-        // Décoder si passé encodé
-        let raw = encodedOrRawText;
-        try {
-            raw = decodeURIComponent(encodedOrRawText);
-        } catch (e) {
-            raw = encodedOrRawText;
-        }
+        if (!response.ok) throw new Error("Erreur serveur TTS");
 
-        // Nettoyage des balises Markdown et emojis
-        const cleanText = raw
-            .replace(/[*_#`]/g, '')
-            .replace(/💡|💊|🔄|📍|🌙|📞|⚠️|💰|🚨/g, '')
-            .trim();
-
-        if (!cleanText) return;
-
-        const utterance = new SpeechSynthesisUtterance(cleanText);
-        
-        // Détecter si la réponse contient de l'arabe
-        const isArabic = /[\u0600-\u06FF]/.test(cleanText);
-        utterance.lang = isArabic ? 'ar-XA' : 'fr-FR';
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-
-        window.speechSynthesis.speak(utterance);
+        const blob = await response.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        currentAudioPlayer = new Audio(audioUrl);
+        currentAudioPlayer.play();
     } catch (err) {
-        console.error("Erreur de synthèse vocale :", err);
+        console.warn("Fallback sur TTS navigateur :", err);
+        // Fallback transparent
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const clean = text.replace(/[*_#`💡💊🔄📍🌙📞⚠️💰🚨]/g, '').trim();
+            const utt = new SpeechSynthesisUtterance(clean);
+            utt.lang = /[\u0600-\u06FF]/.test(clean) ? 'ar-XA' : 'fr-FR';
+            window.speechSynthesis.speak(utt);
+        }
     }
 }
 
-// Tenter de récupérer la position GPS exacte de l'utilisateur
+// Géolocalisation
 if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -143,7 +140,7 @@ if (navigator.geolocation) {
             }
         },
         (err) => {
-            console.log("Position par défaut (Casablanca). Erreur GPS :", err.message);
+            console.log("Position par défaut (Casablanca).");
         },
         { enableHighAccuracy: true, timeout: 5000 }
     );
@@ -154,7 +151,6 @@ const chatForm = document.getElementById('chat-form');
 const userInput = document.getElementById('user-input');
 const voiceBtn = document.getElementById('voice-btn');
 
-// Stockage sécurisé des textes à lire pour éviter les erreurs d'apostrophes dans onclick
 const speechTexts = {};
 
 function appendMessage(sender, htmlContent, isUser = false, rawTextToSpeak = null) {
@@ -177,7 +173,7 @@ function appendMessage(sender, htmlContent, isUser = false, rawTextToSpeak = nul
         }
 
         const audioBtn = rawTextToSpeak ? `
-            <button onclick="playStoredSpeech('${speechId}')" class="text-slate-400 hover:text-teal-600 p-1 float-right" title="Écouter la réponse">
+            <button onclick="playStoredSpeech('${speechId}')" class="text-slate-400 hover:text-teal-600 p-1 float-right" title="Écouter la voix naturelle">
                 <i class="fa-solid fa-volume-high text-xs"></i>
             </button>
         ` : '';
@@ -200,12 +196,11 @@ function appendMessage(sender, htmlContent, isUser = false, rawTextToSpeak = nul
 function playStoredSpeech(speechId) {
     const text = speechTexts[speechId];
     if (text) {
-        speakText(text);
+        playSpeechTTS(text);
     }
 }
 
 function updateInspector(data) {
-    // 1. Intention
     const intentBox = document.getElementById('inspector-intent');
     const intentColors = {
         'check_availability': 'text-blue-700',
@@ -220,7 +215,6 @@ function updateInspector(data) {
         <span class="bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-mono text-[11px]">${Math.round(data.confidence * 100)}%</span>
     `;
 
-    // 2. Entités
     const entBox = document.getElementById('inspector-entities');
     const ents = data.entities || {};
     let entHtml = '';
@@ -230,7 +224,6 @@ function updateInspector(data) {
     if (ents.location) entHtml += `<div><span class="text-slate-400">Ville:</span> <span class="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-bold">📍 ${ents.location}</span></div>`;
     entBox.innerHTML = entHtml || '<p class="text-slate-400 italic">Aucune entité extraite</p>';
 
-    // 3. Médicament CNOPS
     const drugBox = document.getElementById('inspector-drug');
     if (data.matched_drug) {
         const d = data.matched_drug;
@@ -246,7 +239,6 @@ function updateInspector(data) {
         drugBox.innerHTML = '<p class="text-slate-400 italic">Aucun médicament apparié</p>';
     }
 
-    // 4. Mettre à jour la carte avec la position et les pharmacies
     if (data.pharmacies && data.pharmacies.length > 0) {
         const first = data.pharmacies[0];
         updateMapMarkers(data.pharmacies, first.lat, first.lng);
@@ -376,63 +368,83 @@ chatForm.addEventListener('submit', (e) => {
     sendMessage(userInput.value);
 });
 
-// Reconnaissance vocale (SpeechRecognition) robuste
-let recognition = null;
-const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+// ----------------------------------------------------------------------------------
+// Enregistrement Micro Universel via MediaRecorder (Compatible Tous Navigateurs)
+// ----------------------------------------------------------------------------------
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
 
-if (SpeechRec) {
-    recognition = new SpeechRec();
-    recognition.lang = 'fr-FR'; // Langue de reconnaissance par défaut
-    recognition.continuous = false;
-    recognition.interimResults = false;
+async function setupUniversalAudioRecording() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        voiceBtn.style.display = 'none';
+        return;
+    }
 
-    let isRecording = false;
-
-    recognition.onstart = () => {
-        isRecording = true;
-        voiceBtn.classList.remove('text-slate-500');
-        voiceBtn.classList.add('text-red-600', 'bg-red-50', 'animate-pulse');
-        userInput.placeholder = "🔴 Écoute en cours... Parlez maintenant...";
-    };
-
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        userInput.value = transcript;
-        sendMessage(transcript);
-    };
-
-    recognition.onerror = (event) => {
-        console.warn("Erreur reconnaissance vocale :", event.error);
-        if (event.error === 'not-allowed') {
-            alert("Accès au microphone refusé. Veuillez autoriser le micro dans les paramètres de votre navigateur.");
-        }
-    };
-
-    recognition.onend = () => {
-        isRecording = false;
-        voiceBtn.classList.remove('text-red-600', 'bg-red-50', 'animate-pulse');
-        voiceBtn.classList.add('text-slate-500');
-        userInput.placeholder = "Écrivez votre message en Darija, Arabizi ou Français...";
-    };
-
-    voiceBtn.addEventListener('click', () => {
+    voiceBtn.addEventListener('click', async () => {
         if (!isRecording) {
             try {
-                recognition.start();
-            } catch (e) {
-                console.error("Impossible de démarrer la reconnaissance vocale :", e);
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) audioChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    // Stopper tous les flux micro
+                    stream.getTracks().forEach(track => track.stop());
+
+                    // Envoi vers le serveur backend pour transcription
+                    userInput.placeholder = "⏳ Transcription vocale en cours...";
+                    const formData = new FormData();
+                    formData.append('file', audioBlob, 'voice_record.webm');
+
+                    try {
+                        const res = await fetch('/api/audio/transcribe', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const resData = await res.json();
+                        if (resData.text && resData.text.trim()) {
+                            userInput.value = resData.text;
+                            sendMessage(resData.text);
+                        } else {
+                            alert("Aucune parole détectée avec certitude. Veuillez réessayer ou taper votre message.");
+                        }
+                    } catch (err) {
+                        console.error("Erreur de transcription :", err);
+                        alert("Erreur lors de la transcription vocale.");
+                    } finally {
+                        userInput.placeholder = "Écrivez votre message en Darija, Arabizi ou Français...";
+                    }
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                voiceBtn.classList.remove('text-slate-500');
+                voiceBtn.classList.add('text-red-600', 'bg-red-50', 'animate-pulse');
+                userInput.placeholder = "🔴 Enregistrement en cours... Cliquez à nouveau sur le micro pour valider.";
+            } catch (err) {
+                console.error("Erreur accès micro :", err);
+                alert("Accès au microphone refusé ou non disponible. Veuillez vérifier les autorisations du navigateur.");
             }
         } else {
-            recognition.stop();
+            // Arrêter l'enregistrement
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            isRecording = false;
+            voiceBtn.classList.remove('text-red-600', 'bg-red-50', 'animate-pulse');
+            voiceBtn.classList.add('text-slate-500');
         }
-    });
-} else {
-    voiceBtn.addEventListener('click', () => {
-        alert("La reconnaissance vocale via navigateur nécessite un navigateur compatible (Chrome, Edge, Safari) et un accès microphone autorisé.");
     });
 }
 
-// Initialiser la carte au chargement du DOM
+// Initialisation au chargement
 window.addEventListener('DOMContentLoaded', () => {
     initMap();
+    setupUniversalAudioRecording();
 });

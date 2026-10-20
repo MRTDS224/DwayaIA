@@ -4,10 +4,11 @@ Expose les 5 endpoints REST modulaires et sert l'interface utilisateur SPA.
 """
 from pathlib import Path
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from challenge1.app.models.schemas import (
     ParseRequest, ParseResponse,
@@ -18,18 +19,19 @@ from challenge1.app.models.schemas import (
 from challenge1.app.core.nlu_engine import nlu_engine
 from challenge1.app.services.catalog_service import catalog_service
 from challenge1.app.services.pharmacy_service import pharmacy_service
+from challenge1.app.services.audio_service import audio_service
 
 app = FastAPI(
     title="Saydalia AI - Pharmacy Assistant API (Challenge #1)",
     description=(
         "Backend intelligent pour requêtes de patients au Maroc. "
         "Supporte le multilinguisme (Darija, Arabizi, Français), l'extraction d'intentions et d'entités, "
-        "le matching flou sur la nomenclature officielle CNOPS (5 918 médicaments) et la géolocalisation des officines."
+        "le matching flou sur la nomenclature officielle CNOPS (5 918 médicaments), la géolocalisation des officines "
+        "et les fonctionnalités vocales (TTS haute fidélité & STT microphone universel)."
     ),
-    version="1.0.0"
+    version="1.1.0"
 )
 
-# Configuration CORS pour permettre les appels depuis n'importe quel client Web ou mobile
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,7 +40,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Montage des fichiers statiques pour l'interface UI
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -49,6 +50,31 @@ async def serve_ui():
     if index_file.exists():
         return FileResponse(index_file)
     return HTMLResponse("<h1>Saydalia Bot API en ligne. Consultez /docs pour la documentation Swagger.</h1>")
+
+# ----------------------------------------------------------------------------------
+# Endpoints Audio (TTS Haute Fidélité & STT Microphone Universel)
+# ----------------------------------------------------------------------------------
+
+class TTSRequest(BaseModel):
+    text: str
+
+@app.post("/api/audio/tts", tags=["Services Vocaux"])
+async def text_to_speech(req: TTSRequest):
+    """
+    Génère un flux audio MP3 haute clarté avec intonation naturelle (arabe ou français).
+    """
+    audio_bytes = audio_service.text_to_speech_mp3(req.text)
+    return Response(content=audio_bytes, media_type="audio/mpeg")
+
+@app.post("/api/audio/transcribe", tags=["Services Vocaux"])
+async def transcribe_audio(file: UploadFile = File(...)):
+    """
+    Reçoit un enregistrement audio microphone (MediaRecorder WebM/WAV) et le transcrit en texte.
+    Fonctionne sur tous les navigateurs (Firefox, Chrome, Edge, Safari).
+    """
+    audio_bytes = await file.read()
+    transcription = audio_service.speech_to_text(audio_bytes, filename=file.filename or "record.webm")
+    return {"text": transcription}
 
 # ----------------------------------------------------------------------------------
 # Endpoints REST du Pipeline NLP & Catalogue Métier
@@ -184,7 +210,6 @@ async def chat_interaction(req: ChatRequest):
             reply_lines.append("De quel médicament souhaitez-vous vérifier les contre-indications ?")
 
     else: # check_availability (par défaut)
-        # Recherche des pharmacies proches
         search_city = entities.location
         garde_needed = any(kw in req.message.lower() for kw in ["garde", "nuit", "layliya", "daba"])
         pharm_results = pharmacy_service.search_nearby(
@@ -215,4 +240,3 @@ async def chat_interaction(req: ChatRequest):
         alternatives=alternatives,
         pharmacies=pharmacies
     )
-
