@@ -25,6 +25,8 @@ htmlcov/
 *.out
 *.synctex.gz
 *.toc
+*.nav
+*.snm
 
 # OS / Editor artefacts
 .DS_Store

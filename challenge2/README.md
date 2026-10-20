@@ -54,3 +54,4 @@ Le défi intègre le bilinguisme systématique des packagings au Maroc (**Arabe*
 - `memo_technique_vision.pdf` : Mémo d'ingénierie 1 page (Vision, OCR, Matching & Spécifications APIs REST).
 - `pitch_explication_prof.txt` : Guide scripté mot à mot pour la soutenance orale devant le professeur (2 à 3 min).
 - `data/ref-des-medicaments-cnops-2014.xlsx` : Base de vérité terrain officielle des 5 918 médicaments marocains.
+

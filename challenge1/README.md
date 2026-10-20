@@ -87,3 +87,4 @@ PYTHONPATH=. .venv/bin/pytest challenge1/tests/ -v
    - *"Pharmacie de garde casablanca daba"*
 5. **Garde-fou d'Urgence Médicale** :
    - *"3andi wja3 f sadri bzaf w tkhneqt"* ➔ Déclenchement automatique de l'alerte SAMU 150 / 141.
+

@@ -71,3 +71,4 @@ PYTHONPATH=. .venv/bin/pytest challenge1/tests/
 | :--- | :--- | :--- | :--- |
 | **#1 : Dwaya AI** | Assistant vocal & textuel en Darija, Arabizi et Français pour patients et pharmacies. | FastAPI, RapidFuzz, NLU Hybride, Leaflet.js, gTTS & MediaRecorder. | App Web complète, API REST, suite de tests, rapports PDF. |
 | **#2 : Vision & OCR** | Détection et reconnaissance de boîtes de médicaments bilingues (Arabe/FR). | YOLOv8, CLAHE, Deskew, PaddleOCR / EasyOCR, RapidFuzz Matching. | Cadrage technique, modélisation de pipeline, mémo d'ingénierie PDF. |
+
