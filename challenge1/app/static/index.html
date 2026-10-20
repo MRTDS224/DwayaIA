@@ -4,14 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Saydalia Bot - Assistant Pharmacie Multilingue</title>
-    <!-- Tailwind CSS via CDN -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Leaflet CSS & JS pour la Carte Interactive -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         .chat-scroll::-webkit-scrollbar { width: 6px; }
         .chat-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
         .chat-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         .chat-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        #pharmacy-map { min-height: 180px; height: 180px; z-index: 1; }
     </style>
 </head>
 <body class="h-full bg-slate-100 flex flex-col font-sans">
@@ -19,7 +23,7 @@
     <!-- Header Principal -->
     <header class="bg-teal-700 text-white shadow-md py-3 px-6 flex justify-between items-center z-10">
         <div class="flex items-center space-x-3">
-            <div class="bg-white p-2 rounded-full text-teal-700">
+            <div class="bg-white p-2 rounded-full text-teal-700 shadow">
                 <i class="fa-solid fa-staff-snake text-2xl"></i>
             </div>
             <div>
@@ -46,10 +50,11 @@
             <div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex justify-between items-center text-xs text-slate-500">
                 <div class="flex items-center space-x-2">
                     <i class="fa-solid fa-language text-teal-600"></i>
-                    <span>Langues acceptées : Darija (العربية), Arabizi (chiffres 3,7,9), Français</span>
+                    <span>Darija (العربية), Arabizi (3,7,9), Français | Audio TTS 🔊</span>
                 </div>
-                <div id="geo-status" class="text-slate-400">
-                    <i class="fa-solid fa-location-dot"></i> Position : <span id="user-city">Casablanca</span>
+                <div id="geo-status" class="text-slate-400 flex items-center space-x-1">
+                    <i class="fa-solid fa-location-dot text-teal-600"></i>
+                    <span id="user-city">Position : Casablanca</span>
                 </div>
             </div>
 
@@ -61,9 +66,14 @@
                     <div class="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center flex-shrink-0 text-sm shadow">
                         <i class="fa-solid fa-robot"></i>
                     </div>
-                    <div class="bg-slate-100 text-slate-800 rounded-2xl rounded-tl-none p-3.5 max-w-lg shadow-sm text-sm">
-                        <p class="font-medium text-teal-800 mb-1">Salam ! Bonjour !</p>
-                        <p>Je suis votre assistant pour vos besoins pharmaceutiques au Maroc. Vous pouvez m'écrire en Darija, en Arabizi ou en Français :</p>
+                    <div class="bg-slate-100 text-slate-800 rounded-2xl rounded-tl-none p-3.5 max-w-lg shadow-sm text-sm space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="font-medium text-teal-800">Salam ! Bonjour !</span>
+                            <button onclick="speakText('Salam ! Bonjour ! Je suis votre assistant pour vos besoins pharmaceutiques au Maroc.')" class="text-slate-400 hover:text-teal-600 p-1" title="Écouter la réponse">
+                                <i class="fa-solid fa-volume-high text-xs"></i>
+                            </button>
+                        </div>
+                        <p>Je suis votre assistant pour vos besoins pharmaceutiques au Maroc. Vous pouvez m'écrire ou me parler en Darija, en Arabizi ou en Français :</p>
                         <div class="mt-2.5 pt-2 border-t border-slate-200 space-y-1 text-xs text-slate-600">
                             <p>💡 <em>"Khassni doliprane 1g 3afak ana f agadir"</em></p>
                             <p>💡 <em>"Prix dial augmentin 1g wa wach remboursé cnops ?"</em></p>
@@ -93,7 +103,7 @@
             <!-- Barre de saisie & enregistrement vocal -->
             <div class="p-3 bg-white border-t border-slate-200">
                 <form id="chat-form" class="flex items-center space-x-2">
-                    <button type="button" id="voice-btn" class="p-2.5 text-slate-500 hover:text-teal-600 rounded-full hover:bg-slate-100 transition" title="Parler (Note vocale)">
+                    <button type="button" id="voice-btn" class="p-2.5 text-slate-500 hover:text-teal-600 rounded-full hover:bg-slate-100 transition" title="Parler (Reconnaissance Vocale)">
                         <i class="fa-solid fa-microphone text-lg"></i>
                     </button>
                     <input type="text" id="user-input" placeholder="Écrivez votre message en Darija, Arabizi ou Français..." class="flex-1 bg-slate-100 text-sm border-0 rounded-full px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800">
@@ -105,19 +115,27 @@
 
         </div>
 
-        <!-- Volet Droit : Panneau d'Inspection NLU en Temps Réel -->
+        <!-- Volet Droit : Carte Interactive & Panneau d'Inspection NLU -->
         <div class="w-80 lg:w-96 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
             
             <div class="bg-slate-50 border-b border-slate-200 p-3 flex items-center justify-between">
                 <div class="flex items-center space-x-2">
                     <i class="fa-solid fa-brain text-teal-600"></i>
-                    <h2 class="text-sm font-bold text-slate-800">Inspecteur NLU (Live)</h2>
+                    <h2 class="text-sm font-bold text-slate-800">Inspecteur NLU & Carte</h2>
                 </div>
-                <span class="text-xs bg-teal-100 text-teal-800 px-2 py-0.5 rounded font-mono">Pipeline v1.0</span>
+                <span class="text-xs bg-teal-100 text-teal-800 px-2 py-0.5 rounded font-mono">Live v1.1</span>
             </div>
 
             <div class="p-4 flex-1 overflow-y-auto space-y-4 text-xs">
                 
+                <!-- Carte Interactive Leaflet -->
+                <div>
+                    <span class="text-slate-400 font-semibold uppercase tracking-wider block mb-1">
+                        <i class="fa-solid fa-map-location-dot text-teal-600 mr-1"></i> Carte des Officines Proches
+                    </span>
+                    <div id="pharmacy-map" class="rounded-lg border border-slate-200 shadow-inner"></div>
+                </div>
+
                 <!-- Intention Détectée -->
                 <div>
                     <span class="text-slate-400 font-semibold uppercase tracking-wider block mb-1">Intention Classifiée</span>
@@ -143,14 +161,6 @@
                     </div>
                 </div>
 
-                <!-- Données Pharmacies Géolocalisées -->
-                <div>
-                    <span class="text-slate-400 font-semibold uppercase tracking-wider block mb-1">Géolocalisation & Garde</span>
-                    <div id="inspector-pharmacy" class="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-1 text-slate-700">
-                        <p class="text-slate-400 italic">Aucune officine requêtée</p>
-                    </div>
-                </div>
-
                 <!-- Avertissement Légal -->
                 <div class="pt-3 border-t border-slate-100 text-slate-400 text-[10px] leading-relaxed">
                     <i class="fa-solid fa-shield-halved text-amber-500 mr-1"></i>
@@ -167,4 +177,3 @@
     <script src="/static/app.js"></script>
 </body>
 </html>
-

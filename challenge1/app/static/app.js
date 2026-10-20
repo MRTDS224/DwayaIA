@@ -1,18 +1,111 @@
-// Logique Frontend pour Saydalia Bot
+// Logique Frontend pour Saydalia Bot avec Carte Leaflet et Synthèse Vocale (TTS)
 
-let currentLat = null;
-let currentLng = null;
+let currentLat = 33.5731; // Casablanca par défaut
+let currentLng = -7.5898;
+let map = null;
+let markersLayer = null;
 
-// Tenter de récupérer la géolocalisation de l'utilisateur
+// Initialisation de la carte Leaflet
+function initMap() {
+    map = L.map('pharmacy-map').setView([currentLat, currentLng], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 18
+    }).addTo(map);
+
+    markersLayer = L.layerGroup().addTo(map);
+
+    // Marqueur de l'utilisateur
+    L.circleMarker([currentLat, currentLng], {
+        radius: 7,
+        fillColor: "#0284c7",
+        color: "#ffffff",
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.9
+    }).addTo(map).bindPopup("<b>Votre position</b>");
+}
+
+// Mettre à jour les marqueurs des pharmacies sur la carte
+function updateMapMarkers(pharmacies, centerLat, centerLng) {
+    if (!map || !markersLayer) return;
+
+    markersLayer.clearLayers();
+
+    if (centerLat && centerLng) {
+        map.setView([centerLat, centerLng], 13);
+    }
+
+    pharmacies.forEach(p => {
+        if (!p.lat || !p.lng) return;
+
+        const isGarde = Boolean(p.garde);
+        const markerColor = isGarde ? "#16a34a" : "#0d9488"; // Vert si garde, Teal sinon
+
+        const marker = L.circleMarker([p.lat, p.lng], {
+            radius: isGarde ? 9 : 7,
+            fillColor: markerColor,
+            color: "#ffffff",
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9
+        });
+
+        const popupContent = `
+            <div style="font-size: 12px; line-height: 1.4;">
+                <b style="color: ${markerColor};">${p.title}</b><br/>
+                ${isGarde ? '<span style="background: #dcfce7; color: #166534; font-weight: bold; padding: 2px 4px; border-radius: 4px; font-size: 10px;">GARDE 24H</span><br/>' : ''}
+                ${p.address || p.ville}<br/>
+                📞 ${p.phone || 'Non renseigné'}<br/>
+                <a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" style="color: #0284c7; text-decoration: underline; font-weight: 500;">Ouvrir dans Google Maps</a>
+            </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        markersLayer.addLayer(marker);
+    });
+}
+
+// Fonction de Synthèse Vocale (Text-To-Speech)
+function speakText(text) {
+    if (!('speechSynthesis' in window)) {
+        alert("La synthèse vocale n'est pas supportée par votre navigateur.");
+        return;
+    }
+
+    window.speechSynthesis.cancel(); // Arrêter toute lecture précédente
+
+    // Nettoyer le texte du markdown
+    const cleanText = text
+        .replace(/[*_#`]/g, '')
+        .replace(/💡|💊|🔄|📍|🌙|📞|⚠️/g, '')
+        .trim();
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    
+    // Détecter si le texte contient principalement de l'arabe
+    const isArabic = /[\u0600-\u06FF]/.test(cleanText);
+    utterance.lang = isArabic ? 'ar-XA' : 'fr-FR';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    window.speechSynthesis.speak(utterance);
+}
+
+// Géolocalisation Utilisateur
 if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
         (pos) => {
             currentLat = pos.coords.latitude;
             currentLng = pos.coords.longitude;
             document.getElementById('user-city').innerText = `GPS (${currentLat.toFixed(2)}, ${currentLng.toFixed(2)})`;
+            if (map) {
+                map.setView([currentLat, currentLng], 13);
+            }
         },
         () => {
-            console.log("Géolocalisation refusée ou indisponible. Ville par défaut utilisée.");
+            console.log("Géolocalisation par défaut (Casablanca).");
         }
     );
 }
@@ -22,7 +115,7 @@ const chatForm = document.getElementById('chat-form');
 const userInput = document.getElementById('user-input');
 const voiceBtn = document.getElementById('voice-btn');
 
-function appendMessage(sender, htmlContent, isUser = false) {
+function appendMessage(sender, htmlContent, isUser = false, rawTextToSpeak = null) {
     const msgDiv = document.createElement('div');
     msgDiv.className = `flex items-start space-x-3 ${isUser ? 'justify-end' : ''}`;
     
@@ -36,11 +129,18 @@ function appendMessage(sender, htmlContent, isUser = false) {
             </div>
         `;
     } else {
+        const audioBtn = rawTextToSpeak ? `
+            <button onclick="speakText('${encodeURIComponent(rawTextToSpeak)}')" class="text-slate-400 hover:text-teal-600 p-1 float-right" title="Écouter la réponse vocale">
+                <i class="fa-solid fa-volume-high text-xs"></i>
+            </button>
+        ` : '';
+
         msgDiv.innerHTML = `
             <div class="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center flex-shrink-0 text-sm shadow">
                 <i class="fa-solid fa-robot"></i>
             </div>
             <div class="bg-slate-100 text-slate-800 rounded-2xl rounded-tl-none p-3.5 max-w-lg shadow-sm text-sm space-y-2">
+                ${audioBtn}
                 ${htmlContent}
             </div>
         `;
@@ -92,15 +192,10 @@ function updateInspector(data) {
         drugBox.innerHTML = '<p class="text-slate-400 italic">Aucun médicament apparié</p>';
     }
 
-    // 4. Pharmacies
-    const pharmBox = document.getElementById('inspector-pharmacy');
+    // 4. Mettre à jour la carte avec les pharmacies retournées
     if (data.pharmacies && data.pharmacies.length > 0) {
-        pharmBox.innerHTML = `
-            <div class="font-bold text-slate-800">${data.pharmacies.length} officines identifiées</div>
-            <div class="text-[11px] text-slate-500">Garde active: ${data.pharmacies.filter(p => p.garde).length}</div>
-        `;
-    } else {
-        pharmBox.innerHTML = '<p class="text-slate-400 italic">Aucune officine requêtée</p>';
+        const first = data.pharmacies[0];
+        updateMapMarkers(data.pharmacies, first.lat, first.lng);
     }
 }
 
@@ -110,7 +205,6 @@ async function sendMessage(text) {
     appendMessage('user', text, true);
     userInput.value = '';
 
-    // Loader temporaire
     const loadingId = 'loading-' + Date.now();
     const loadingDiv = document.createElement('div');
     loadingDiv.id = loadingId;
@@ -140,13 +234,10 @@ async function sendMessage(text) {
         const data = await response.json();
         document.getElementById(loadingId)?.remove();
 
-        // Mettre à jour l'inspecteur NLU
         updateInspector(data);
 
-        // Formater le message assistant
         let replyHtml = `<p>${data.reply_text}</p>`;
 
-        // Si médicament identifié
         if (data.matched_drug) {
             const d = data.matched_drug;
             replyHtml += `
@@ -165,7 +256,6 @@ async function sendMessage(text) {
             `;
         }
 
-        // Si alternatives / génériques trouvés
         if (data.alternatives && data.alternatives.length > 0) {
             replyHtml += `<div class="mt-2 font-semibold text-xs text-purple-800">🔄 Génériques équivalents disponibles :</div><div class="space-y-1 mt-1">`;
             data.alternatives.slice(0, 3).forEach(alt => {
@@ -182,9 +272,8 @@ async function sendMessage(text) {
             replyHtml += `</div>`;
         }
 
-        // Si pharmacies de garde ou proches
         if (data.pharmacies && data.pharmacies.length > 0) {
-            replyHtml += `<div class="mt-2 font-semibold text-xs text-blue-800">📍 Officines à proximité :</div><div class="space-y-1.5 mt-1">`;
+            replyHtml += `<div class="mt-2 font-semibold text-xs text-blue-800">📍 Officines à proximité (visibles sur la carte) :</div><div class="space-y-1.5 mt-1">`;
             data.pharmacies.slice(0, 3).forEach(p => {
                 const isGarde = Boolean(p.garde);
                 replyHtml += `
@@ -196,7 +285,9 @@ async function sendMessage(text) {
                         <div class="text-slate-500 text-[11px] mt-0.5">${p.address || p.ville}</div>
                         <div class="flex justify-between items-center mt-1 text-[11px] text-slate-600">
                             <span><i class="fa-solid fa-phone text-slate-400 mr-1"></i>${p.phone || 'Non renseigné'}</span>
-                            <span class="text-slate-400 font-mono">${p.distance_km < 900 ? p.distance_km + ' km' : p.ville}</span>
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" class="text-teal-600 hover:underline">
+                                <i class="fa-solid fa-diamond-turn-right mr-1"></i>Itinéraire
+                            </a>
                         </div>
                     </div>
                 `;
@@ -204,7 +295,6 @@ async function sendMessage(text) {
             replyHtml += `</div>`;
         }
 
-        // Alerte d'urgence vitale
         if (data.safety_alert) {
             replyHtml = `
                 <div class="p-3 bg-red-100 border-l-4 border-red-600 rounded text-red-800 text-xs font-semibold">
@@ -213,7 +303,7 @@ async function sendMessage(text) {
             `;
         }
 
-        appendMessage('assistant', replyHtml, false);
+        appendMessage('assistant', replyHtml, false, data.reply_text);
 
     } catch (err) {
         document.getElementById(loadingId)?.remove();
@@ -231,12 +321,11 @@ chatForm.addEventListener('submit', (e) => {
     sendMessage(userInput.value);
 });
 
-// Reconnaissance vocale navigateur (Web Speech API)
-let recognition = null;
+// Reconnaissance vocale (SpeechRecognition)
 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SpeechRec();
-    recognition.lang = 'ar-MA'; // ou 'fr-FR'
+    const recognition = new SpeechRec();
+    recognition.lang = 'ar-MA';
     recognition.continuous = false;
     recognition.interimResults = false;
 
@@ -268,9 +357,9 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             recognition.stop();
         }
     });
-} else {
-    voiceBtn.addEventListener('click', () => {
-        alert("La reconnaissance vocale directe n'est pas supportée par votre navigateur. Vous pouvez saisir votre requête au clavier.");
-    });
 }
 
+// Initialiser la carte au chargement du DOM
+window.addEventListener('DOMContentLoaded', () => {
+    initMap();
+});
