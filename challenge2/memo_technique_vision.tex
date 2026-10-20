@@ -1,0 +1,98 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[margin=1.1cm,top=0.9cm,bottom=0.9cm]{geometry}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{microtype}
+
+% Theme Colors
+\definecolor{primary}{RGB}{18, 80, 130}       % Navy Medical / Vision
+\definecolor{secondary}{RGB}{34, 139, 34}     % Pharmacy Green
+\definecolor{darktext}{RGB}{40, 40, 40}
+\definecolor{bglight}{RGB}{245, 247, 250}
+
+\setlist{itemsep=2.5pt,topsep=3.5pt,parsep=1pt,partopsep=0pt,leftmargin=1.2em}
+
+\titleformat{\section}{\color{primary}\bfseries\small\uppercase}{\thesection}{0.4em}{}[\vspace{1pt}\hrule height 0.6pt\vspace{3pt}]
+\titlespacing*{\section}{0pt}{7pt}{3pt}
+
+\pagestyle{empty}
+
+\begin{document}
+
+% Header
+\begin{center}
+    {\color{primary}\Large \bfseries MEMO TECHNIQUE : COMPUTER VISION, OCR \& MATCHING PRODUIT}\\[2pt]
+    {\color{secondary}\bfseries Reconnaissance de Boîtes de Médicaments (Challenge \#2 --- Maroc)}\\[2pt]
+    {\small \color{darktext} \textbf{Auteurs :} Diallo Mamadou Tahirou \& BenelMoudden Hassan \quad|\quad \textbf{Rôle :} Tech Lead \& Ingénieur Vision/OCR}
+\end{center}
+
+\vspace{-4pt}
+
+% 1. Typologie des images et conditions réelles
+\section*{1. Typologie des Images \& Conditions Réelles d'Acquisition}
+\begin{itemize}
+    \item \textbf{Artefacts Optiques Fréquents :} Photos smartphones en environnement non contrôlé : flou de bougé, reflets spéculaires (blister / pelliculage plastique), contre-jour et ombres portées.
+    \item \textbf{Occultations \& Angles de Perspective :} Boîte vue de biais (anamorphose typographique), packaging froissé/découpé, présence d'éléments perturbateurs (doigts, ordonnance, arrière-plan encombré).
+    \item \textbf{Spécificités Typographiques Bilingues :} Double étiquetage simultané : graphie latine (Français) et graphie arabe cursive, présence de polices artistiques pour la marque et de petits caractères réglementaires (dosage, DCI, numéro de lot).
+\end{itemize}
+
+% 2. Pipeline Vision, OCR & Matching
+\section*{2. Pipeline de Traitement Vision, OCR \& Matching Produits}
+\begin{itemize}
+    \item \textbf{Phase 1 : Localisation \& Prétraitement Géométrique :} 
+    Détecteur \textbf{YOLOv8-nano} pour segmenter la zone d'intérêt (RoI de la boîte). Redressement d'angle (\textit{deskew} via Hough Transform) et correction photométrique (\textbf{CLAHE} pour rehausser le contraste local du texte).
+    \item \textbf{Phase 2 : OCR Hybride Bilingue (Arabe / Français) :}
+    Moteur \textbf{PaddleOCR} (PP-OCRv4) / \textbf{EasyOCR} équipé du détecteur CRAFT et d'un réseau CRNN supportant simultanément les alphabets latin et arabe. Post-traitement directionnel (inversion BiDi et reshapeur de ligatures arabes).
+    \item \textbf{Phase 3 : Moteur d'Appariement Hybride \& Désambiguïsation :}
+    Matching à deux étages contre le référentiel officiel CNOPS/DMP (5 918 SKUs) :
+    \begin{enumerate}[label=\alph*),itemsep=1pt,topsep=1pt]
+        \item \textit{Étage Lexical/Fuzzy} : \textbf{RapidFuzz / Token Set Ratio} pour tolérer les erreurs OCR (\textit{"D0L1PRANE"} $\rightarrow$ \texttt{DOLIPRANE}).
+        \item \textit{Étage Règle \& Validation Multi-Attributs} : Extraction conjointe obligatoire de la Marque, du Dosage (\texttt{1000 mg}) et de la Forme galénique (\texttt{comprimé}) pour désambiguïser les déclinaisons d'une même gamme.
+    \end{enumerate}
+\end{itemize}
+
+% 3. Garde-fous & Fallbacks
+\section*{3. Gestion des Cas Limites \& Garde-fous (Confidence \& Fallbacks)}
+\begin{itemize}
+    \item \textbf{Score de Confiance Composite :} Combinaison pondérée : $\text{Score} = 0.5 \times \text{Conf}_{\text{OCR}} + 0.5 \times \text{Sim}_{\text{Matching}}$.
+    \begin{itemize}
+        \item $\text{Score} \ge 0.85$ : Identification certaine $\rightarrow$ Validation automatique.
+        \item $0.60 \le \text{Score} < 0.85$ : Ambiguïté détectée $\rightarrow$ Envoi d'une liste de 3 suggestions cliquables (photo + nom) pour confirmation utilisateur.
+        \item $\text{Score} < 0.60$ : Rejet $\rightarrow$ Demande de reprise photo avec consignes de cadrage (éviter les reflets, recadrer sur le texte principal).
+    \end{itemize}
+    \item \textbf{Avertissement Réglementaire :} Notification impérative rappelant que la reconnaissance visuelle ne dispense pas de la vérification de la notice par un professionnel de santé.
+\end{itemize}
+
+% 4. Spécifications APIs
+\section*{4. Architecture \& Spécifications des APIs Backend (FastAPI / REST)}
+\renewcommand{\arraystretch}{1.25}
+\begin{small}
+\begin{tabularx}{\textwidth}{@{}l p{4.2cm} X@{}}
+\toprule
+\textbf{Méthode \& Route} & \textbf{Payload d'Entrée} & \textbf{Réponse / Rôle} \\
+\midrule
+\texttt{POST /vision/recognize} & \texttt{multipart/form-data : image} (JPEG/PNG), \texttt{crop\_box} (opt) & \texttt{200 OK} : Médicament identifié (\texttt{cip\_code}, \texttt{nom}, \texttt{dci}, \texttt{dosage}), score de confiance et zones détectées (bounding boxes). \\
+\texttt{POST /vision/ocr-extract} & \texttt{multipart/form-data : image} & \texttt{200 OK} : Texte brut extrait par l'OCR séparé par langue (\texttt{text\_fr}, \texttt{text\_ar}) avec scores de reconnaissance. \\
+\texttt{POST /vision/match-catalog} & \texttt{\{"ocr\_tokens": ["doli", "1000mg"]\}} & \texttt{200 OK} : Top-3 candidats du catalogue CNOPS/DMP triés par similarité floue avec attributs détaillés. \\
+\texttt{GET /catalog/drugs/\{id\}} & \textit{Path param} : \texttt{cip\_code} (string) & \texttt{200 OK} : Fiche produit complète (PPV, générique/princeps, forme galénique, remboursement AMO). \\
+\bottomrule
+\end{tabularx}
+\end{small}
+
+\vfill
+\hrule height 0.4pt
+\vspace{2pt}
+\begin{center}
+    {\tiny \color{darktext} Document Spécification Technique --- Challenge \#2 (Medication Box Recognition) --- Octobre 2026}
+\end{center}
+
+\end{document}

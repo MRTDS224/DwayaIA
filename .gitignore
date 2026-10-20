@@ -1,0 +1,34 @@
+# Python & Environments
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs & temporary files
+*.log
+*.tmp
+*.bak
+
+# LaTeX build artefacts (preserve PDF and TEX)
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
+*.toc
+
+# OS / Editor artefacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

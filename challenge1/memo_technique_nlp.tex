@@ -1,0 +1,103 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[margin=1.1cm,top=0.9cm,bottom=0.9cm]{geometry}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{microtype}
+
+% Theme Colors
+\definecolor{primary}{RGB}{18, 80, 130}       % Navy Medical
+\definecolor{secondary}{RGB}{34, 139, 34}     % Pharmacy Green
+\definecolor{darktext}{RGB}{40, 40, 40}
+\definecolor{bglight}{RGB}{245, 247, 250}
+
+\setlist{itemsep=2.5pt,topsep=3.5pt,parsep=1pt,partopsep=0pt,leftmargin=1.2em}
+
+\titleformat{\section}{\color{primary}\bfseries\small\uppercase}{\thesection}{0.4em}{}[\vspace{1pt}\hrule height 0.6pt\vspace{3pt}]
+\titlespacing*{\section}{0pt}{7pt}{3pt}
+
+\pagestyle{empty}
+
+\begin{document}
+
+% Header
+\begin{center}
+    {\color{primary}\Large \bfseries MEMO TECHNIQUE : ARCHITECTURE NLP \& APIS BACKEND}\\[2pt]
+    {\color{secondary}\bfseries Chatbot Pharmaceutique Multilingue (Challenge \#1 --- Maroc)}\\[2pt]
+    {\small \color{darktext} \textbf{Auteurs :} Diallo Mamadou Tahirou \& BenelMoudden Hassan \quad|\quad \textbf{Rôle :} Tech Lead \& Ingénieur NLP}
+\end{center}
+
+\vspace{-4pt}
+
+% 1. Typologie des requêtes
+\section*{1. Typologie des Requêtes Utilisateurs (Intents)}
+\begin{itemize}
+    \item \textbf{\texttt{check\_availability}} : Recherche de stock ou d'officine disponible.\newline
+    \textit{Utterances brutes :} \texttt{"khassni doliprane 1g 3afak fin nqder nlqah daba casablanca"} / \texttt{"dispo doli sirop enfant ?"}
+    \item \textbf{\texttt{ask\_price\_reimbursement}} : Demande du Prix Public de Vente (PPV) et remboursement CNOPS/AMO.\newline
+    \textit{Utterances brutes :} \texttt{"chhal thaman dial augmantin 1g wa wach remboursable cnops"} / \texttt{"prix du kardegic 75"}
+    \item \textbf{\texttt{find\_alternatives}} : Recherche de génériques ou de substitution DCI.\newline
+    \textit{Utterances brutes :} \texttt{"maqitch amoxil achnou nqder nakhd f blastou"} / \texttt{"remplaçant de clamoxyl 1g"}
+    \item \textbf{\texttt{ask\_posology\_usage}} : Informations d'usage et posologie usuelle.\newline
+    \textit{Utterances brutes :} \texttt{"chhal mn habba f nhar dial spafon"} / \texttt{"doliprane 500 avant ou après le repas ?"}
+    \item \textbf{\texttt{ask\_side\_effects\_safety}} : Contre-indications et alertes de sécurité.\newline
+    \textit{Utterances brutes :} \texttt{"wach doliprane khayf l la femme enceinte"} / \texttt{"effets secondaires du daflon"}
+\end{itemize}
+
+% 2. Pipeline NLP & Matching
+\section*{2. Pipeline NLP \& Extraction d'Entités (NER \& Matching)}
+\begin{itemize}
+    \item \textbf{Normalisation \& Trilinguisme (Darija / Arabizi / FR / Arabe) :}
+    Translittération Arabizi $\rightarrow$ FR/Arabe via dictionnaire phonétique (mappage \texttt{'3'}$\rightarrow$Ain, \texttt{'7'}$\rightarrow$Haa, \texttt{'9'}$\rightarrow$Qaf). Tokenisation subword (CamemBERT / DarijaBERT). Suppression des diacritiques, normalisation Unicode NDFC et passage en minuscules.
+    \item \textbf{Résolution Floue \& Phonétique des Marques :}
+    Recherche hybride 2-Tier sur le référentiel CNOPS/DMP (5 918 SKUs) :
+    \begin{enumerate}[label=\alph*),itemsep=1pt,topsep=1pt]
+        \item \textit{Tier 1 (Lexical/Phonétique)} : \textbf{SymSpell} ($d \le 2$) couplé à un algorithme \textbf{Double Metaphone} adapté au latin/français pour absorber les fautes de frappe (\textit{"augmantain"} $\rightarrow$ \texttt{AUGMENTIN}, \textit{"doli"} $\rightarrow$ \texttt{DOLIPRANE}).
+        \item \textit{Tier 2 (Sémantique)} : Bi-encoder dense (\texttt{Sentence-BERT}) calculant la similarité cosinus (seuil $> 0.82$).
+    \end{enumerate}
+    \item \textbf{Désambiguïsation Multi-Attributs :} Modèle Spacy NER entraîné à extraire conjointement les slots \texttt{[BRAND\_NAME]}, \texttt{[DCI]}, \texttt{[DOSAGE\_VAL]}, \texttt{[DOSAGE\_UNIT]}, \texttt{[GALENIC\_FORM]}, \texttt{[PACKAGING]}.\newline
+    \textit{Exemple :} \texttt{"doliprane 1000 mg gélule bte de 8"} $\rightarrow$ \texttt{\{DCI: "PARACETAMOL", Brand: "DOLIPRANE", Dosage: 1000, Form: "GELULE"\}}.
+\end{itemize}
+
+% 3. Garde-fous & Fallbacks
+\section*{3. Gestion des Cas Limites \& Garde-fous (Safety \& Fallbacks)}
+\begin{itemize}
+    \item \textbf{Seuils de Confiance NLU :} 
+    $\text{Score} \ge 0.85$ : Exécution directe API Métier. $|$ $0.60 \le \text{Score} < 0.85$ : \textbf{Confirmation Active} via boutons d'action UI (sélection parmi top-3 molécules/dosages). $|$ $\text{Score} < 0.60$ : Fallback vers reformulation guidée.
+    \item \textbf{Garde-fous Médicaux \& Sécurité :} Détection automatique d'expressions d'urgence ou de diagnostic médical (\textit{"j'ai une douleur thoracique"}) $\rightarrow$ Interruption immédiate du flux conversationnel, affichage du numéro d'urgence (150/141) et redirection officine.
+    \item \textbf{Disclaimer Légal Obligatoire :} Mentions légales systématiques : \textit{"Assistant d'information logistique et tarifaire. Ne remplace pas la prescription d'un médecin ni le conseil du pharmacien."}
+\end{itemize}
+
+% 4. Spécifications APIs
+\section*{4. Architecture \& Spécifications des APIs Backend (FastAPI / REST)}
+\renewcommand{\arraystretch}{1.25}
+\begin{small}
+\begin{tabularx}{\textwidth}{@{}l p{3.8cm} X@{}}
+\toprule
+\textbf{Méthode \& Route} & \textbf{Payload d'Entrée} & \textbf{Réponse / Rôle} \\
+\midrule
+\texttt{POST /nlu/parse} & \texttt{\{"text": "doli 1g", "lang": "auto"\}} & \texttt{200 OK} : Intent détecté, entités extraites (\texttt{slots}), score de confiance et suggestions de clarification UI. \\
+\texttt{POST /catalog/search} & \texttt{\{"query": "doli 1g", "fuzzy": true\}} & \texttt{200 OK} : Liste des candidats CNOPS/DMP triés par score de pertinence (\texttt{cip\_code}, \texttt{nom}, \texttt{dci}, \texttt{ppv}). \\
+\texttt{GET /catalog/drugs/\{id\}} & \textit{Path param} : \texttt{cip\_code} (string) & \texttt{200 OK} : Fiche produit exhaustive (DCI, dosage, forme galénique, PPV, statut générique, taux AMO). \\
+\texttt{POST /pharmacies/availability} & \texttt{\{"cip\_code": "6118...", "lat": 30.42, "lng": -9.59\}} & \texttt{200 OK} : Liste des officines proches (source Saydalia), distances, contacts et statut de garde (Jour/Nuit). \\
+\bottomrule
+\end{tabularx}
+\end{small}
+
+\vfill
+\hrule height 0.4pt
+\vspace{2pt}
+\begin{center}
+    {\tiny \color{darktext} Document Spécification Technique --- Project Chatbot Pharmaceutique --- Septembre 2026}
+\end{center}
+
+\end{document}
+

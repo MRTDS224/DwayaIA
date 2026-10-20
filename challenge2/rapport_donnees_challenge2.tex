@@ -1,0 +1,142 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[margin=1.1cm,top=0.9cm,bottom=0.9cm]{geometry}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+\usepackage{microtype}
+
+% Palette de couleurs professionnelle
+\definecolor{primary}{RGB}{18, 80, 130}       % Bleu Santé / Vision
+\definecolor{secondary}{RGB}{34, 139, 34}     % Vert Pharmacie
+\definecolor{darktext}{RGB}{40, 40, 40}
+\definecolor{bglight}{RGB}{244, 247, 250}
+\definecolor{accent}{RGB}{211, 84, 0}         % Orange Subtil
+
+\setlist{itemsep=3pt,topsep=4pt,parsep=1.5pt,partopsep=0pt,leftmargin=1.3em}
+
+\titleformat{\section}{\color{primary}\bfseries\large}{\thesection}{0.5em}{}[\vspace{1pt}\hrule height 0.7pt\vspace{4pt}]
+\titlespacing*{\section}{0pt}{8pt}{4pt}
+
+\pagestyle{empty}
+
+\begin{document}
+
+% En-tête du Rapport
+\begin{center}
+    {\color{primary}\LARGE \bfseries Cadrage Technique \& Architecture des Données}\\[4pt]
+    {\color{secondary}\large \bfseries Challenge \#2 : Reconnaissance de Boîtes de Médicaments par Computer Vision \& OCR}\\[3pt]
+    {\small \color{darktext} Détection d'Objets --- OCR Multilingue (Arabe \& Français) --- Matching Référentiel Médicaments Maroc}\\[4pt]
+    {\small \textbf{Réalisé par (Binôme) :} \textbf{Diallo Mamadou Tahirou} \quad \& \quad \textbf{BenelMoudden Hassan}}
+\end{center}
+
+\vspace{0.15cm}
+
+% 1. Compréhension du Projet
+\section*{1. Compréhension \& Enjeux du Projet}
+\begin{itemize}
+    \item \textbf{Contexte Métier :} Identifier de manière fiable un médicament à partir d'une photo de sa boîte ou de son emballage prise par un patient ou un personnel de santé via smartphone (conditions non contrôlées).
+    \item \textbf{Défis Visuels \& Typographiques :} Variabilité extrême de prise de vue (flou de bougé, reflets plastiques, occultation partielle, angles de perspective, contre-jour) et bilinguisme systématique des packagings au Maroc (arabe et français).
+    \item \textbf{Objectif Système :} Localiser la zone d'intérêt (boîte), extraire le texte bilingue par OCR, effectuer un appariement (\textit{matching}) avec le référentiel national CNOPS/DMP et exposer le service d'identification via une API REST.
+\end{itemize}
+
+\vspace{0.25cm}
+
+% 2. Sources de Données
+\section*{2. Provenance \& Sources des Données Collectées}
+\renewcommand{\arraystretch}{1.35}
+\begin{small}
+\begin{tabularx}{\textwidth}{@{}l p{4.5cm} X l@{}}
+\toprule
+\textbf{Gisement} & \textbf{Source \& Méthode} & \textbf{Contenu \& Utilité Métier} & \textbf{Volumétrie} \\
+\midrule
+\textbf{Référentiel Médicaments} & DMP / CNOPS (\texttt{data.gov.ma}) & Base de vérité terrain : Noms commerciaux, DCI, dosages, formes galéniques et conditionnements officiels. & 5 918 SKUs \\
+\textbf{Corpus Images Médicaments} & Datasets Kaggle \& Hugging Face + Synthèse contrôlée & Photos réelles de packagings, boîtes et étiquettes pharmaceutiques sous angles et éclairages variés. & $\sim$2 000+ images \\
+\textbf{Corpus Local Marocain} & Collecte ciblée / Protocole Smartphone & Photos représentatives des médicaments les plus prescrits au Maroc (Doliprane, Amoxil, Kardegic, etc.). & Dataset de validation \\
+\bottomrule
+\end{tabularx}
+\end{small}
+
+\vspace{0.25cm}
+
+% 3. Structure des Données
+\section*{3. Modélisation \& Structure des Données}
+\renewcommand{\arraystretch}{1.2}
+\begin{small}
+\begin{tabularx}{\textwidth}{@{}X X@{}}
+\textbf{Structure 1 : Métadonnées Image \& Annotations BBox} & \textbf{Structure 2 : Extraction OCR \& Résultat Matching} \\
+\midrule
+\texttt{\small
+\textbf{image\_id}: "IMG\_20261013\_0042.jpg"\newline
+\textbf{resolution}: [1920, 1080] | \textbf{format}: "JPEG"\newline
+\textbf{bbox\_box}: [ymin, xmin, ymax, xmax] (YOLO)\newline
+\textbf{attributes}: \{"angle": 15, "lighting": "low"\}\newline
+\textbf{ground\_truth\_cip}: "6118001230068"
+} &
+\texttt{\small
+\textbf{ocr\_raw\_fr}: ["DOLIPRANE", "1000 mg", "comprimé"]\newline
+\textbf{ocr\_raw\_ar}: ["DOLIPRANE (Arabe)", "1000 mg"]\newline
+\textbf{matched\_cip}: "6118001230068"\newline
+\textbf{confidence\_score}: 0.94\newline
+\textbf{status}: "MATCH\_CONFIRMED"
+} \\
+\bottomrule
+\end{tabularx}
+\end{small}
+
+\vspace{0.25cm}
+
+% 4. Schéma d'Architecture & Flux de Données
+\section*{4. Architecture globale du Pipeline Vision \& Reconnaissance}
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}[
+    node distance=0.55cm and 1.0cm,
+    font=\sffamily\scriptsize,
+    box/.style={draw=primary!80, fill=bglight, rectangle, rounded corners=4pt, align=center, inner sep=5pt, minimum height=0.85cm, line width=0.6pt},
+    data/.style={draw=secondary!80, fill=secondary!10, rectangle, rounded corners=4pt, align=center, inner sep=5pt, minimum height=0.85cm, line width=0.6pt},
+    api/.style={draw=accent!80, fill=accent!10, rectangle, rounded corners=4pt, align=center, inner sep=5pt, minimum height=0.85cm, line width=0.6pt},
+    arrow/.style={-Stealth, color=primary, line width=0.8pt}
+]
+
+% Top Row: Entrée & Prétraitement
+\node[box] (input_img) {\textbf{Photo Smartphone}\\\textit{Boîte de médicament (JPEG/PNG)}};
+\node[box, right=1.0cm of input_img] (detect_box) {\textbf{Détection \& Recadrage}\\\textit{YOLOv8 / Bounding Box RoI}};
+
+% Second Row: Prétraitement Vision & OCR
+\node[box, below=0.5cm of detect_box] (prep_vision) {\textbf{Restitution \& Deblur}\\\textit{CLAHE, Débruitage \& Deskew}};
+\node[box, below=0.5cm of input_img] (ocr_engine) {\textbf{OCR Bilingue (Arabe / FR)}\\\textit{PaddleOCR / EasyOCR + CRAFT}};
+
+% Third Row: Matching Base CNOPS
+\node[data, below=0.55cm of ocr_engine, xshift=1.8cm, text width=7.2cm] (db_match) {\textbf{Moteur d'Appariement Hybride \& Base CNOPS (5 918 SKUs)}\\\textit{Fuzzy Matching (Levenshtein) + Embeddings denses bi-script}};
+
+% Fourth Row: API Finale
+\node[api, below=0.55cm of db_match, text width=10.2cm] (api_out) {\textbf{Service API REST (FastAPI)}\\Restitue JSON : \texttt{\{cip: "6118001230068", nom: "DOLIPRANE 1000 MG", dci: "PARACETAMOL", score: 0.94\}}};
+
+% Connections
+\draw[arrow] (input_img) -- (detect_box);
+\draw[arrow] (detect_box) -- (prep_vision);
+\draw[arrow] (prep_vision) -- (ocr_engine);
+\draw[arrow] (ocr_engine) -- (db_match);
+\draw[arrow] (db_match) -- (api_out);
+
+\end{tikzpicture}
+\end{center}
+
+\vfill
+\hrule height 0.5pt
+\vspace{3pt}
+\begin{center}
+    {\small \color{darktext} Rapport de Cadrage Technique --- Challenge \#2 (Medication Box Recognition) --- Diallo Mamadou Tahirou \& BenelMoudden Hassan --- Octobre 2026}
+\end{center}
+
+\end{document}

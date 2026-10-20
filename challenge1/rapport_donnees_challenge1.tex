@@ -1,0 +1,146 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[margin=1.1cm,top=0.9cm,bottom=0.9cm]{geometry}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+\usepackage{microtype}
+
+% Palette de couleurs professionnelle
+\definecolor{primary}{RGB}{18, 80, 130}       % Bleu Santé / Médical
+\definecolor{secondary}{RGB}{34, 139, 34}     % Vert Pharmacie
+\definecolor{darktext}{RGB}{40, 40, 40}
+\definecolor{bglight}{RGB}{244, 247, 250}
+\definecolor{accent}{RGB}{211, 84, 0}         % Orange Subtil
+
+\setlist{itemsep=3pt,topsep=4pt,parsep=1.5pt,partopsep=0pt,leftmargin=1.3em}
+
+\titleformat{\section}{\color{primary}\bfseries\large}{\thesection}{0.5em}{}[\vspace{1pt}\hrule height 0.7pt\vspace{4pt}]
+\titlespacing*{\section}{0pt}{8pt}{4pt}
+
+\pagestyle{empty}
+
+\begin{document}
+
+% En-tête du Rapport
+\begin{center}
+    {\color{primary}\LARGE \bfseries Cadrage Technique \& Architecture des Données}\\[4pt]
+    {\color{secondary}\large \bfseries Challenge \#1 : Assistant Conversationnel Patient-Pharmacie (Maroc)}\\[3pt]
+    {\small \color{darktext} Multilingue (Arabe, Darija, Français) --- Extraction d'Intentions \& Données Géolocalisées}\\[4pt]
+    {\small \textbf{Réalisé par (Binôme) :} \textbf{Diallo Mamadou Tahirou} \quad \& \quad \textbf{BenelMoudden Hassan}}
+\end{center}
+
+\vspace{0.15cm}
+
+% 1. Compréhension du Projet
+\section*{1. Compréhension \& Enjeux du Projet}
+\begin{itemize}
+    \item \textbf{Contexte Métier :} Dans le secteur de la santé au Maroc, les patients expriment leurs besoins via des messages courts, vocaux ou textuels informels (notes vocales WhatsApp, SMS en Arabizi/Darija). L'objectif est de concevoir un service intelligent capable de structurer ces demandes pour la recherche de médicaments et d’officines.
+    \item \textbf{Défis Linguistiques :} Prise en charge du trilinguisme (Arabe dialectal/Darija, Arabe Standard, Français), du \textit{code-switching} (ex: \textit{"Khassni doliprane 1g 3afak"}), et de la déformation phonétique des noms commerciaux de médicaments.
+    \item \textbf{Objectif Système :} Classifier l'intention utilisateur (\texttt{check\_availability}, \texttt{locate\_pharmacy}, \texttt{check\_guard}, \texttt{ask\_price}), extraire les entités (\texttt{MEDICAMENT}, \texttt{DCI}, \texttt{DOSAGE}, \texttt{VILLE}) et restituer une réponse structurée via une API REST.
+\end{itemize}
+
+\vspace{0.25cm}
+
+% 2. Sources de Données
+\section*{2. Provenance \& Sources des Données Collectées}
+\renewcommand{\arraystretch}{1.35}
+\begin{small}
+\begin{tabularx}{\textwidth}{@{}l p{4.2cm} X l@{}}
+\toprule
+\textbf{Gisement} & \textbf{Source \& Méthode} & \textbf{Contenu \& Utilité Métier} & \textbf{Volumétrie} \\
+\midrule
+\textbf{Nomenclature Médicaments} & DMP / CNOPS (\texttt{data.gov.ma}) & Référentiel officiel : Nom commercial, DCI, Dosage, Forme galénique, Prix PPV, Statut Princeps/Générique. & 5 918 produits \\
+\textbf{Référentiel Pharmacies} & API \texttt{Saydalia.ma} (Scraping API) & Adresses, Coordonnées GPS (Lat/Lng), N° Téléphone, Statut de Garde (Jour/Nuit), Distance spatiale. & 800 officines \\
+\textbf{Corpus NLU / Dialectal} & Synthèse LLM \& Open Data & Phrasé multilingue en Darija (caractères arabes \& Arabizi), transcriptions vocales simulées pour le NLU. & En constitution \\
+\bottomrule
+\end{tabularx}
+\end{small}
+
+\vspace{0.25cm}
+
+% 3. Structure des Données
+\section*{3. Modélisation \& Structure des Données}
+\renewcommand{\arraystretch}{1.2}
+\begin{small}
+\begin{tabularx}{\textwidth}{@{}X X@{}}
+\textbf{Structure 1 : Référentiel Médicament (CNOPS/DMP)} & \textbf{Structure 2 : Officine \& Garde (Saydalia API)} \\
+\midrule
+\texttt{\small
+\textbf{CODE}: "6118000241256" (CIP-13)\newline
+\textbf{NOM}: "MYNAZOL 50 MG"\newline
+\textbf{DCI}: "FLUCONAZOLE"\newline
+\textbf{DOSAGE}: "50" | \textbf{UNITE}: "MG"\newline
+\textbf{FORME}: "GELULE" | \textbf{PRESENTATION}: "BOITE DE 7"\newline
+\textbf{PPV}: 87.00 DH | \textbf{TYPE}: "Générique"
+} &
+\texttt{\small
+\textbf{id}: "9559" | \textbf{title}: "Pharmacie Assoul"\newline
+\textbf{Phone}: "0528214671"\newline
+\textbf{address}: "bd Bir Anzarane, Tikiouine, Agadir"\newline
+\textbf{Ville}: "Agadir" | \textbf{garde}: "garde 24h/24"\newline
+\textbf{lat}: 30.4280405 | \textbf{lng}: -9.5925444
+} \\
+\bottomrule
+\end{tabularx}
+\end{small}
+
+\vspace{0.25cm}
+
+% 4. Schéma d'Architecture & Flux de Données
+\section*{4. Architecture globale du Pipeline de Données \& NLU}
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}[
+    node distance=0.55cm and 1.0cm,
+    font=\sffamily\scriptsize,
+    box/.style={draw=primary!80, fill=bglight, rectangle, rounded corners=4pt, align=center, inner sep=5pt, minimum height=0.85cm, line width=0.6pt},
+    data/.style={draw=secondary!80, fill=secondary!10, rectangle, rounded corners=4pt, align=center, inner sep=5pt, minimum height=0.85cm, line width=0.6pt},
+    api/.style={draw=accent!80, fill=accent!10, rectangle, rounded corners=4pt, align=center, inner sep=5pt, minimum height=0.85cm, line width=0.6pt},
+    arrow/.style={-Stealth, color=primary, line width=0.8pt}
+]
+
+% Top Row: Entrées Utilisateur
+\node[box] (input_text) {\textbf{Entrée Texte}\\\textit{"Khassni doliprane 1g 3afak"}};
+\node[box, right=1.0cm of input_text] (input_voice) {\textbf{Entrée Vocale (Audio)}\\\textit{Note vocale WhatsApp (Darija)}};
+
+% Second Row: Prétraitement
+\node[box, below=0.5cm of input_voice] (stt) {\textbf{Module Speech-to-Text (ASR)}\\Whisper / Fine-tuned Darija};
+\node[box, below=0.5cm of input_text] (nlu) {\textbf{Moteur NLU \& Intent/NER}\\Spacy / CamemBERT / LLM};
+
+% Third Row: Normalisation & Bases
+\node[data, below=0.55cm of nlu, xshift=-0.5cm] (db_med) {\textbf{Base Médicaments (5 918)}\\CNOPS/DMP (Fuzzy Matching DCI)};
+\node[data, right=0.6cm of db_med] (db_pharm) {\textbf{Base Pharmacies (800)}\\Saydalia API (Geo-Search Lat/Lng)};
+
+% Fourth Row: API Finale
+\node[api, below=0.55cm of db_med, xshift=2.45cm, text width=10.0cm] (api_out) {\textbf{Service Backend API (FastAPI / REST)}\\Restitue JSON : \texttt{\{intent: check\_availability, drug: Doliprane 1g, pharmacy: Pharmacie Assoul, status: garde\}}};
+
+% Connections
+\draw[arrow] (input_voice) -- (stt);
+\draw[arrow] (stt) -- (nlu);
+\draw[arrow] (input_text) -- (nlu);
+\draw[arrow] (nlu) -- (db_med);
+\draw[arrow] (nlu) -- (db_pharm);
+\draw[arrow] (db_med) -- (api_out);
+\draw[arrow] (db_pharm) -- (api_out);
+
+\end{tikzpicture}
+\end{center}
+
+\vfill
+\hrule height 0.5pt
+\vspace{3pt}
+\begin{center}
+    {\small \color{darktext} Rapport de Cadrage Technique --- Challenge \#1 (Patient Pharmacy Assistance) --- Diallo Mamadou Tahirou \& BenelMoudden Hassan --- Septembre 2026}
+\end{center}
+
+\end{document}
