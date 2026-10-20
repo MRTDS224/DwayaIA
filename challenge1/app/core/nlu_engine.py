@@ -204,3 +204,4 @@ class NLUEngine:
 
 # Instance singleton partagée
 nlu_engine = NLUEngine()
+

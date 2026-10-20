@@ -85,3 +85,4 @@ class ChatResponse(BaseModel):
     pharmacies: List[PharmacySummary] = []
     safety_alert: Optional[str] = None
     disclaimer: str = "Assistant informatif logistique et tarifaire. Ne remplace pas la prescription d'un médecin ni le conseil du pharmacien."
+

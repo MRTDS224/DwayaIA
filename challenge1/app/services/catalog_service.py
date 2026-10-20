@@ -167,3 +167,4 @@ class CatalogService:
 
 # Instance singleton partagée
 catalog_service = CatalogService()
+

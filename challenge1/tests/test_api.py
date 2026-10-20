@@ -46,3 +46,4 @@ def test_api_chat_orchestrator():
     assert data["intent"] == "ask_price_reimbursement"
     assert data["matched_drug"] is not None
     assert "AUGMENTIN" in data["matched_drug"]["nom"]
+

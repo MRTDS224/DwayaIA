@@ -273,3 +273,4 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         alert("La reconnaissance vocale directe n'est pas supportée par votre navigateur. Vous pouvez saisir votre requête au clavier.");
     });
 }
+

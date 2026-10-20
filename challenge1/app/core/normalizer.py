@@ -81,3 +81,4 @@ def detect_script(text: str) -> str:
     elif any(d in text for d in ['3', '7', '9', '5']) and latin_chars > 0:
         return "arabizi"
     return "latin_or_french"
+

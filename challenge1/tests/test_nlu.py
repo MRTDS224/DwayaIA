@@ -29,3 +29,4 @@ def test_emergency_guardrail():
     alert = nlu_engine.check_emergency("3andi wja3 f sadri bzaf w tkhneqt")
     assert alert is not None
     assert "SAMU" in alert
+

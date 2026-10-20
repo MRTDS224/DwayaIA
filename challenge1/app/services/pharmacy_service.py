@@ -91,3 +91,4 @@ class PharmacyService:
 
 # Instance singleton partagée
 pharmacy_service = PharmacyService()
+

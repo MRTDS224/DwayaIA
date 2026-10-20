@@ -26,3 +26,4 @@ def test_alternatives_dci():
     alts = catalog_service.get_alternatives(target["code"])
     assert len(alts) > 0
     assert any("AMOXIL" in a["nom"] or "AMOXICILLINE" in a["dci"] for a in alts)
+

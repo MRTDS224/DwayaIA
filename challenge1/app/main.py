@@ -215,3 +215,4 @@ async def chat_interaction(req: ChatRequest):
         alternatives=alternatives,
         pharmacies=pharmacies
     )
+

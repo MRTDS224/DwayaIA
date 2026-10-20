@@ -25,3 +25,4 @@ def test_detect_script():
     assert detect_script("doliprane 1000") == "latin_or_french"
     assert detect_script("khassni 3afak dwa") == "arabizi"
     assert detect_script("أريد دواء دوليبران") == "arabic"
+
