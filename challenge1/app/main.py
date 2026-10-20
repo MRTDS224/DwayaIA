@@ -22,7 +22,7 @@ from challenge1.app.services.pharmacy_service import pharmacy_service
 from challenge1.app.services.audio_service import audio_service
 
 app = FastAPI(
-    title="Saydalia AI - Pharmacy Assistant API (Challenge #1)",
+    title="Dwaya AI - Assistant Pharmacie Multilingue (Challenge #1)",
     description=(
         "Backend intelligent pour requêtes de patients au Maroc. "
         "Supporte le multilinguisme (Darija, Arabizi, Français), l'extraction d'intentions et d'entités, "
@@ -49,7 +49,7 @@ async def serve_ui():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
         return FileResponse(index_file)
-    return HTMLResponse("<h1>Saydalia Bot API en ligne. Consultez /docs pour la documentation Swagger.</h1>")
+    return HTMLResponse("<h1>Dwaya AI - API en ligne. Consultez /docs pour la documentation Swagger.</h1>")
 
 # ----------------------------------------------------------------------------------
 # Endpoints Audio (TTS Haute Fidélité & STT Microphone Universel)

@@ -7,7 +7,7 @@ client = TestClient(app)
 def test_root_ui_serves_html():
     res = client.get("/")
     assert res.status_code == 200
-    assert "Saydalia AI Assistant" in res.text
+    assert "Dwaya AI" in res.text
 
 def test_api_nlu_parse():
     res = client.post("/api/nlu/parse", json={"text": "khassni doliprane 1g f agadir"})

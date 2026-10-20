@@ -1,4 +1,4 @@
-// Logique Frontend pour Saydalia Bot avec Carte Leaflet, TTS Haute Fidélité et Micro Universel
+// Logique Frontend pour Dwaya AI (دوايا) avec Carte Leaflet, TTS Haute Fidélité et Micro Universel
 
 let currentLat = 33.5731; // Casablanca par défaut
 let currentLng = -7.5898;
