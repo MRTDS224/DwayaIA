@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saydalia Bot - Assistant Pharmacie Multilingue</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .chat-scroll::-webkit-scrollbar { width: 6px; }
+        .chat-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .chat-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="h-full bg-slate-100 flex flex-col font-sans">
+
+    <!-- Header Principal -->
+    <header class="bg-teal-700 text-white shadow-md py-3 px-6 flex justify-between items-center z-10">
+        <div class="flex items-center space-x-3">
+            <div class="bg-white p-2 rounded-full text-teal-700">
+                <i class="fa-solid fa-staff-snake text-2xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-wide">Saydalia AI Assistant</h1>
+                <p class="text-xs text-teal-100">Pharmacie Conversationnelle Multilingue (Darija / Arabizi / Français)</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-teal-800 text-teal-100 border border-teal-600">
+                <span class="w-2 h-2 mr-2 bg-green-400 rounded-full animate-ping"></span>
+                5 918 Médicaments (CNOPS) & 800 Pharmacies
+            </span>
+            <span class="text-xs text-teal-200">Binôme: Diallo M. T. & BenelMoudden H.</span>
+        </div>
+    </header>
+
+    <!-- Corps de l'application (Deux volets) -->
+    <div class="flex-1 flex overflow-hidden max-w-7xl w-full mx-auto p-4 gap-4">
+
+        <!-- Volet Gauche : Interface de Chat -->
+        <div class="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+            
+            <!-- Barre d'état du chat -->
+            <div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex justify-between items-center text-xs text-slate-500">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-language text-teal-600"></i>
+                    <span>Langues acceptées : Darija (العربية), Arabizi (chiffres 3,7,9), Français</span>
+                </div>
+                <div id="geo-status" class="text-slate-400">
+                    <i class="fa-solid fa-location-dot"></i> Position : <span id="user-city">Casablanca</span>
+                </div>
+            </div>
+
+            <!-- Messages Scrollables -->
+            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto chat-scroll space-y-4">
+                
+                <!-- Message de Bienvenue -->
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center flex-shrink-0 text-sm shadow">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <div class="bg-slate-100 text-slate-800 rounded-2xl rounded-tl-none p-3.5 max-w-lg shadow-sm text-sm">
+                        <p class="font-medium text-teal-800 mb-1">Salam ! Bonjour !</p>
+                        <p>Je suis votre assistant pour vos besoins pharmaceutiques au Maroc. Vous pouvez m'écrire en Darija, en Arabizi ou en Français :</p>
+                        <div class="mt-2.5 pt-2 border-t border-slate-200 space-y-1 text-xs text-slate-600">
+                            <p>💡 <em>"Khassni doliprane 1g 3afak ana f agadir"</em></p>
+                            <p>💡 <em>"Prix dial augmentin 1g wa wach remboursé cnops ?"</em></p>
+                            <p>💡 <em>"Pharmacie de garde casablanca daba"</em></p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Suggestions rapides de test -->
+            <div class="px-4 py-2 bg-slate-50 border-t border-slate-200 flex space-x-2 overflow-x-auto text-xs">
+                <button onclick="sendQuickMessage('Khassni doliprane 1g 3afak f agadir')" class="bg-white border border-slate-300 hover:border-teal-500 px-2.5 py-1 rounded-full whitespace-nowrap text-slate-600 hover:text-teal-700 transition">
+                    📍 Doliprane 1g à Agadir
+                </button>
+                <button onclick="sendQuickMessage('Prix du clamoxyl 1g et est-il remboursé ?')" class="bg-white border border-slate-300 hover:border-teal-500 px-2.5 py-1 rounded-full whitespace-nowrap text-slate-600 hover:text-teal-700 transition">
+                    💰 Prix Clamoxyl 1g
+                </button>
+                <button onclick="sendQuickMessage('Générique f blast clamoxyl 1g')" class="bg-white border border-slate-300 hover:border-teal-500 px-2.5 py-1 rounded-full whitespace-nowrap text-slate-600 hover:text-teal-700 transition">
+                    🔄 Générique Clamoxyl
+                </button>
+                <button onclick="sendQuickMessage('Pharmacie de garde casablanca daba')" class="bg-white border border-slate-300 hover:border-teal-500 px-2.5 py-1 rounded-full whitespace-nowrap text-slate-600 hover:text-teal-700 transition">
+                    🌙 Garde Casablanca
+                </button>
+            </div>
+
+            <!-- Barre de saisie & enregistrement vocal -->
+            <div class="p-3 bg-white border-t border-slate-200">
+                <form id="chat-form" class="flex items-center space-x-2">
+                    <button type="button" id="voice-btn" class="p-2.5 text-slate-500 hover:text-teal-600 rounded-full hover:bg-slate-100 transition" title="Parler (Note vocale)">
+                        <i class="fa-solid fa-microphone text-lg"></i>
+                    </button>
+                    <input type="text" id="user-input" placeholder="Écrivez votre message en Darija, Arabizi ou Français..." class="flex-1 bg-slate-100 text-sm border-0 rounded-full px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800">
+                    <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white rounded-full p-2.5 w-10 h-10 flex items-center justify-center transition shadow">
+                        <i class="fa-solid fa-paper-plane text-sm"></i>
+                    </button>
+                </form>
+            </div>
+
+        </div>
+
+        <!-- Volet Droit : Panneau d'Inspection NLU en Temps Réel -->
+        <div class="w-80 lg:w-96 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+            
+            <div class="bg-slate-50 border-b border-slate-200 p-3 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-brain text-teal-600"></i>
+                    <h2 class="text-sm font-bold text-slate-800">Inspecteur NLU (Live)</h2>
+                </div>
+                <span class="text-xs bg-teal-100 text-teal-800 px-2 py-0.5 rounded font-mono">Pipeline v1.0</span>
+            </div>
+
+            <div class="p-4 flex-1 overflow-y-auto space-y-4 text-xs">
+                
+                <!-- Intention Détectée -->
+                <div>
+                    <span class="text-slate-400 font-semibold uppercase tracking-wider block mb-1">Intention Classifiée</span>
+                    <div id="inspector-intent" class="bg-slate-50 border border-slate-200 rounded-lg p-2.5 flex items-center justify-between">
+                        <span class="font-mono font-bold text-slate-700">En attente...</span>
+                        <span class="text-slate-400">--%</span>
+                    </div>
+                </div>
+
+                <!-- Entités Extraites -->
+                <div>
+                    <span class="text-slate-400 font-semibold uppercase tracking-wider block mb-1">Entités Nommées (Slots)</span>
+                    <div id="inspector-entities" class="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-1 font-mono text-slate-600">
+                        <p class="text-slate-400 italic">Aucune entité extraite</p>
+                    </div>
+                </div>
+
+                <!-- Résolution Médicament CNOPS -->
+                <div>
+                    <span class="text-slate-400 font-semibold uppercase tracking-wider block mb-1">Résolution Catalogue CNOPS</span>
+                    <div id="inspector-drug" class="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-1 text-slate-700">
+                        <p class="text-slate-400 italic">Aucun médicament apparié</p>
+                    </div>
+                </div>
+
+                <!-- Données Pharmacies Géolocalisées -->
+                <div>
+                    <span class="text-slate-400 font-semibold uppercase tracking-wider block mb-1">Géolocalisation & Garde</span>
+                    <div id="inspector-pharmacy" class="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-1 text-slate-700">
+                        <p class="text-slate-400 italic">Aucune officine requêtée</p>
+                    </div>
+                </div>
+
+                <!-- Avertissement Légal -->
+                <div class="pt-3 border-t border-slate-100 text-slate-400 text-[10px] leading-relaxed">
+                    <i class="fa-solid fa-shield-halved text-amber-500 mr-1"></i>
+                    Garde-fous actifs : détection d'urgence vitale SAMU 150 & non-substitution au médecin/pharmacien.
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Script Application -->
+    <script src="/static/app.js"></script>
+</body>
+</html>
