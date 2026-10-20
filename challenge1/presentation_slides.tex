@@ -162,36 +162,40 @@
 \end{frame}
 
 % -----------------------------------------------------------------------------
-% SLIDE 4 : Ce que vous allez voir dans la Démo (Écran Partagé)
+% SLIDE 4 : Périmètre Opérationnel : Ce que Dwaya AI Fait vs Ne Fait Pas
 % -----------------------------------------------------------------------------
-\begin{frame}{Ce que vous allez observer dans la Démo Interactive}
+\begin{frame}{Périmètre Opérationnel : Ce que Dwaya AI Fait vs Ne Fait Pas}
 \begin{columns}[T]
     \begin{column}{0.48\textwidth}
-        \begin{tcolorbox}[colback=white, colframe=primary!60, title=\bfseries \small Volet Gauche : Expérience Patient, arc=4pt]
-            \begin{itemize}\setlength\itemsep{4pt}\footnotesize
-                \item \textbf{Messagerie Conversationnelle} : Saisie libre en Darija, Arabizi ou Français.
-                \item \textbf{Bouton Microphone} : Enregistrement universel sans dépendance Chrome.
-                \item \textbf{Bouton Audio} : Lecture vocale fluide avec voix naturelle (arabe ou français).
-                \item \textbf{Fiches \& Génériques} : Affichage du PPV, DCI et génériques équivalents.
+        \begin{tcolorbox}[colback=teal!3, colframe=primary, title=\bfseries \small $\checkmark$ Ce que le Système FAIT (Cas Attendus), arc=4pt, top=3pt, bottom=3pt, left=5pt, right=5pt]
+            \begin{itemize}\setlength\itemsep{2pt}\footnotesize
+                \item \textbf{Prix \& Fiche CNOPS} : Prix public (PPV), DCI, dosage et conditionnement exacts.
+                \item \textbf{Alternatives Génériques} : Suggestion d'équivalents chimiques certifiés moins chers.
+                \item \textbf{Pharmacies \& Gardes} : Proximité Haversine (< 35 km) et statut de nuit 24H/24.
+                \item \textbf{Support Multilingue} : Darija, Arabizi (3, 7, 9) ou Français (texte \& audio).
             \end{itemize}
         \end{tcolorbox}
     \end{column}
 
     \begin{column}{0.48\textwidth}
-        \begin{tcolorbox}[colback=white, colframe=accent!60, title=\bfseries \small Volet Droit : Sous le Capot (NLU Live), arc=4pt]
-            \begin{itemize}\setlength\itemsep{4pt}\footnotesize
-                \item \textbf{Carte Interactive Leaflet} : Votre position (Point Bleu) et les officines proches (Points Verts de garde).
-                \item \textbf{Jauge d'Intention} : Classification en direct avec score de confiance.
-                \item \textbf{Extraction des Entités} : Tags colorés (Marque, Dosage, Forme, Ville).
-                \item \textbf{Résolution CNOPS} : Code CIP identifié par RapidFuzz.
+        \begin{tcolorbox}[colback=red!3, colframe=warningred!85!black, title=\bfseries \small $\times$ Ce que le Système NE FAIT PAS (Garde-fous), arc=4pt, top=3pt, bottom=3pt, left=5pt, right=5pt]
+            \begin{itemize}\setlength\itemsep{2pt}\footnotesize
+                \item \textbf{Pas de Diagnostic} : Ne remplace ni le médecin ni le pharmacien (pas d'ordonnance).
+                \item \textbf{Pas de Vente / Livraison} : Outil strictement informatif (aucun e-commerce ni paiement).
+                \item \textbf{Pas de Données Personnelles} : Confidentialité totale (aucun dossier stocké).
+                \item \textbf{Pas d'Urgence Vitale} : Arrêt immédiat et dérivation automatique vers le SAMU (150).
             \end{itemize}
         \end{tcolorbox}
     \end{column}
 \end{columns}
 
-\vspace{0.25cm}
+\vspace{0.12cm}
 \begin{center}
-    {\large \bfseries \color{primary} Passons maintenant à la Démonstration en Direct !}
+    \begin{tikzpicture}
+        \node[draw=primary!40, fill=white, rounded corners=4pt, inner sep=3pt, text width=13cm, align=center, drop shadow={opacity=0.05}] {
+            {\scriptsize \textbf{\color{primary}Règle d'or :} Assistant d'orientation pharmaco-économique au service du patient, complémentaire au pharmacien.}
+        };
+    \end{tikzpicture}
 \end{center}
 \end{frame}
 
