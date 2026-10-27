@@ -101,14 +101,21 @@
                 <button onclick="sendQuickMessage('Pharmacie de garde casablanca daba')" class="bg-white border border-slate-300 hover:border-teal-500 px-2.5 py-1 rounded-full whitespace-nowrap text-slate-600 hover:text-teal-700 transition">
                     🌙 Garde Casablanca
                 </button>
+                <button onclick="triggerSamplePhotoScan()" class="bg-teal-50 border border-teal-300 hover:border-teal-600 px-2.5 py-1 rounded-full whitespace-nowrap text-teal-800 font-medium hover:bg-teal-100 transition shadow-sm">
+                    <i class="fa-solid fa-camera text-teal-600 mr-1"></i> 📷 Scanner Boîte (Augmentin)
+                </button>
             </div>
 
-            <!-- Barre de saisie & enregistrement vocal -->
+            <!-- Barre de saisie, enregistrement vocal & scan caméra -->
             <div class="p-3 bg-white border-t border-slate-200">
                 <form id="chat-form" class="flex items-center space-x-2">
                     <button type="button" id="voice-btn" class="p-2.5 text-slate-500 hover:text-teal-600 rounded-full hover:bg-slate-100 transition" title="Parler (Reconnaissance Vocale)">
                         <i class="fa-solid fa-microphone text-lg"></i>
                     </button>
+                    <button type="button" id="camera-btn" class="p-2.5 text-slate-500 hover:text-teal-600 rounded-full hover:bg-slate-100 transition" title="Scanner une boîte de médicament (Photo / OCR)">
+                        <i class="fa-solid fa-camera text-lg"></i>
+                    </button>
+                    <input type="file" id="camera-input" accept="image/*" class="hidden">
                     <input type="text" id="user-input" placeholder="Écrivez votre message en Darija, Arabizi ou Français..." class="flex-1 bg-slate-100 text-sm border-0 rounded-full px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800">
                     <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white rounded-full p-2.5 w-10 h-10 flex items-center justify-center transition shadow">
                         <i class="fa-solid fa-paper-plane text-sm"></i>
@@ -161,6 +168,16 @@
                     <span class="text-slate-400 font-semibold uppercase tracking-wider block mb-1">Résolution Catalogue CNOPS</span>
                     <div id="inspector-drug" class="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-1 text-slate-700">
                         <p class="text-slate-400 italic">Aucun médicament apparié</p>
+                    </div>
+                </div>
+
+                <!-- Reconnaissance Visuelle & OCR (Challenge #2) -->
+                <div>
+                    <span class="text-slate-400 font-semibold uppercase tracking-wider block mb-1">
+                        <i class="fa-solid fa-camera text-teal-600 mr-1"></i> Vision & OCR Boîte (Challenge #2)
+                    </span>
+                    <div id="inspector-vision" class="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-1 text-slate-700">
+                        <p class="text-slate-400 italic">Aucune boîte scannée</p>
                     </div>
                 </div>
 

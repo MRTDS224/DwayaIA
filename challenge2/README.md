@@ -55,3 +55,20 @@ Le défi intègre le bilinguisme systématique des packagings au Maroc (**Arabe*
 - `pitch_explication_prof.txt` : Guide scripté mot à mot pour la soutenance orale devant le professeur (2 à 3 min).
 - `data/ref-des-medicaments-cnops-2014.xlsx` : Base de vérité terrain officielle des 5 918 médicaments marocains.
 
+---
+
+## 🛠️ Implémentation & Code Source
+
+Le code source complet du pipeline est disponible dans le package `challenge2/vision/` :
+- `preprocessor.py` : Algorithmes de segmentation RoI, CLAHE anti-reflet et redressement d'angle (deskew).
+- `ocr_engine.py` : Moteur OCR bilingue (Arabe et Français), gestion BiDi et extraction de regex posologiques.
+- `matcher.py` : Moteur d'appariement RapidFuzz, boost multi-attributs (marque + dosage + forme) et calcul du score composite réglementaire.
+- `service.py` : Orchestrateur end-to-end intégrant les alternatives génériques CNOPS.
+- `routes.py` : 4 endpoints REST FastAPI (`POST /vision/recognize`, `POST /vision/ocr-extract`, `POST /vision/match-catalog`, `GET /catalog/drugs/{id}`).
+
+### Exécution des Tests Automatisés
+```bash
+PYTHONPATH=. .venv/bin/pytest challenge2/tests/ -v
+```
+Les 17 tests unitaires et d'intégration couvrent la totalité du pipeline de vision, d'OCR et d'APIs.
+

@@ -443,8 +443,297 @@ async function setupUniversalAudioRecording() {
     });
 }
 
+// ----------------------------------------------------------------------------------
+// Module Vision & OCR (Challenge #2) — Scan de Boîte de Médicaments
+// ----------------------------------------------------------------------------------
+
+function setupCameraAndVision() {
+    const cameraBtn = document.getElementById('camera-btn');
+    const cameraInput = document.getElementById('camera-input');
+
+    if (!cameraBtn || !cameraInput) return;
+
+    cameraBtn.addEventListener('click', () => {
+        cameraInput.click();
+    });
+
+    cameraInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        await uploadAndScanMedicationBox(file);
+        cameraInput.value = '';
+    });
+}
+
+async function uploadAndScanMedicationBox(file, hintTokens = null) {
+    if (!file) return;
+
+    // 1. Lire la miniature de l'image pour l'afficher côté utilisateur
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const imgUrl = e.target.result;
+        const userHtml = `
+            <div class="space-y-1.5">
+                <p class="font-medium">📷 Photo de boîte envoyée :</p>
+                <img src="${imgUrl}" class="max-w-[220px] max-h-[140px] rounded-lg border border-slate-200 shadow-sm object-cover" alt="Boîte envoyée" />
+            </div>
+        `;
+        appendMessage('user', userHtml, true);
+
+        // Indicateur de chargement
+        const loadingId = 'loading-vision-' + Date.now();
+        const loadingDiv = document.createElement('div');
+        loadingDiv.id = loadingId;
+        loadingDiv.className = 'flex items-start space-x-3';
+        loadingDiv.innerHTML = `
+            <div class="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center flex-shrink-0 text-sm shadow">
+                <i class="fa-solid fa-camera animate-spin"></i>
+            </div>
+            <div class="bg-slate-100 rounded-2xl rounded-tl-none p-3.5 max-w-lg shadow-sm text-sm text-slate-500">
+                <i class="fa-solid fa-circle-notch fa-spin mr-2 text-teal-600"></i> Traitement Vision, CLAHE, OCR bilingue et matching CNOPS en cours...
+            </div>
+        `;
+        chatMessages.appendChild(loadingDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        const formData = new FormData();
+        formData.append('image', file, file.name || 'medication_box.jpg');
+        if (hintTokens) {
+            formData.append('hint_tokens', hintTokens);
+        }
+
+        try {
+            const res = await fetch('/vision/recognize', {
+                method: 'POST',
+                body: formData
+            });
+
+            document.getElementById(loadingId)?.remove();
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || "Erreur lors de l'analyse optique de l'image.");
+            }
+
+            const data = await res.json();
+            renderVisionScanResponse(data);
+
+        } catch (err) {
+            document.getElementById(loadingId)?.remove();
+            appendMessage('assistant', `<span class="text-red-500 font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Erreur Vision : ${err.message}</span>`, false);
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+function renderVisionScanResponse(data) {
+    let statusBadge = '';
+    let scoreColor = 'teal';
+
+    if (data.status === 'validated') {
+        statusBadge = `<span class="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full text-xs font-bold"><i class="fa-solid fa-check-circle mr-1"></i> Identifié avec Certitude</span>`;
+        scoreColor = 'emerald';
+    } else if (data.status === 'ambiguous') {
+        statusBadge = `<span class="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full text-xs font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Validation Requise</span>`;
+        scoreColor = 'amber';
+    } else {
+        statusBadge = `<span class="bg-red-100 text-red-800 border border-red-300 px-2 py-0.5 rounded-full text-xs font-bold"><i class="fa-solid fa-times-circle mr-1"></i> Rejet Optique (< 0.60)</span>`;
+        scoreColor = 'red';
+    }
+
+    let replyHtml = `
+        <div class="space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                <span class="font-bold text-slate-800 text-sm"><i class="fa-solid fa-microchip text-teal-600 mr-1.5"></i> Reconnaissance Visuelle (Challenge #2)</span>
+                ${statusBadge}
+            </div>
+
+            <!-- Score composite -->
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="font-semibold text-slate-700">Score de Confiance Composite :</span>
+                    <span class="font-bold text-${scoreColor}-600">${(data.composite_score * 100).toFixed(0)}%</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                    <div class="bg-teal-600 h-2 rounded-full" style="width: ${Math.min(100, data.composite_score * 100)}%"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+                    <span>Conf. OCR : ${(data.conf_ocr * 100).toFixed(0)}%</span>
+                    <span>Similarité CNOPS : ${(data.sim_matching * 100).toFixed(0)}%</span>
+                    <span>Redressement : ${data.skew_angle}°</span>
+                </div>
+            </div>
+
+            <p class="text-sm text-slate-700">${data.message}</p>
+    `;
+
+    // Si médicament identifié
+    if (data.matched_drug) {
+        const drug = data.matched_drug;
+        replyHtml += `
+            <div class="bg-white border-2 border-teal-500 rounded-xl p-3.5 shadow-sm space-y-2">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h4 class="font-bold text-slate-900 text-sm">${drug.nom}</h4>
+                        <p class="text-xs text-slate-500">DCI : <span class="font-semibold text-slate-700">${drug.dci || 'Non spécifiée'}</span></p>
+                    </div>
+                    <span class="bg-teal-50 text-teal-800 font-bold px-2.5 py-1 rounded-lg text-sm border border-teal-200">
+                        ${drug.ppv.toFixed(2)} MAD
+                    </span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-1">
+                    <div><span class="text-slate-400">Dosage :</span> ${drug.dosage || 'N/A'}</div>
+                    <div><span class="text-slate-400">Forme :</span> ${drug.forme || 'N/A'}</div>
+                    <div><span class="text-slate-400">Type :</span> ${drug.is_generique ? 'Générique' : 'Princeps'}</div>
+                    <div><span class="text-slate-400">Code CIP :</span> <code class="bg-slate-100 px-1 py-0.5 rounded">${drug.cip}</code></div>
+                </div>
+
+                <div class="pt-2 border-t border-slate-100 flex space-x-2">
+                    <button onclick="sendQuickMessage('Trouver pharmacie pour ${drug.nom}')" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium py-1.5 px-3 rounded-lg transition text-center shadow-sm">
+                        📍 Trouver en pharmacie
+                    </button>
+                    <button onclick="sendQuickMessage('Générique f blast ${drug.nom}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium py-1.5 px-3 rounded-lg transition">
+                        🔄 Génériques
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // Alternatives génériques
+    if (data.generics && data.generics.length > 0) {
+        replyHtml += `
+            <div class="pt-1">
+                <span class="text-xs font-bold text-slate-700 block mb-1.5">💡 Génériques équivalents plus économiques :</span>
+                <div class="space-y-1.5">
+        `;
+        data.generics.forEach(g => {
+            replyHtml += `
+                <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-2 flex justify-between items-center text-xs">
+                    <div>
+                        <span class="font-bold text-emerald-900">${g.nom}</span>
+                        <span class="text-emerald-700 text-[11px] block">${g.dosage} - ${g.forme}</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="font-bold text-emerald-800">${g.ppv.toFixed(2)} MAD</span>
+                        ${g.savings_mad > 0 ? `<span class="block text-[10px] text-emerald-600 font-semibold">-${g.savings_mad.toFixed(2)} MAD</span>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        replyHtml += `</div></div>`;
+    }
+
+    // Avertissement réglementaire
+    replyHtml += `
+            <div class="pt-2 border-t border-slate-100 text-[10px] text-slate-400 leading-tight">
+                <i class="fa-solid fa-shield-halved text-amber-500 mr-1"></i> ${data.disclaimer}
+            </div>
+        </div>
+    `;
+
+    appendMessage('assistant', replyHtml, false, data.message);
+
+    // Mettre à jour l'inspecteur NLU & Vision
+    updateVisionInspector(data);
+}
+
+function updateVisionInspector(data) {
+    const insp = document.getElementById('inspector-vision');
+    if (!insp) return;
+
+    const roi = data.roi_box || {};
+    insp.innerHTML = `
+        <div class="space-y-1.5 text-[11px]">
+            <div class="flex justify-between items-center">
+                <span class="text-slate-500 font-semibold">Statut :</span>
+                <span class="font-mono font-bold ${data.status === 'validated' ? 'text-emerald-600' : (data.status === 'ambiguous' ? 'text-amber-600' : 'text-red-600')}">${data.status.toUpperCase()}</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-slate-500">Score Composite :</span>
+                <span class="font-mono font-bold text-teal-700">${(data.composite_score * 100).toFixed(0)}%</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-slate-500">RoI Détectée :</span>
+                <span class="font-mono text-slate-600">[${roi.x || 0}, ${roi.y || 0}, ${roi.w || 0}x${roi.h || 0}]</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-slate-500">Angle Deskew :</span>
+                <span class="font-mono text-slate-600">${data.skew_angle || 0}°</span>
+            </div>
+            ${data.extracted_text?.fr ? `
+                <div class="pt-1 border-t border-slate-200">
+                    <span class="text-slate-500 block">Texte OCR FR :</span>
+                    <span class="font-mono text-slate-700 block truncate">${data.extracted_text.fr}</span>
+                </div>
+            ` : ''}
+            ${data.extracted_text?.ar ? `
+                <div class="pt-1 border-t border-slate-200">
+                    <span class="text-slate-500 block">Texte OCR Arabe :</span>
+                    <span class="font-mono text-slate-700 block truncate" dir="rtl">${data.extracted_text.ar}</span>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Fonction de démo en 1-clic pour le professeur
+async function triggerSamplePhotoScan() {
+    // Créer une image simulée sur un canvas HTML5 avec le packaging bilingue d'Augmentin
+    const canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 380;
+    const ctx = canvas.getContext('2d');
+
+    // Fond blanc avec liseré pharmaceutique
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#0d9488';
+    ctx.lineWidth = 6;
+    ctx.fillRect(40, 30, 520, 320);
+    ctx.strokeRect(40, 30, 520, 320);
+
+    // Bandeau couleur marque
+    ctx.fillStyle = '#2563eb';
+    ctx.fillRect(40, 30, 520, 65);
+
+    // Titre de marque
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 32px sans-serif';
+    ctx.fillText('AUGMENTIN 1g / 125mg', 60, 75);
+
+    // Inscription en Arabe
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillText('أوغمنتين 1 غرام', 380, 140);
+
+    // Dosage & Forme
+    ctx.fillStyle = '#dc2626';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText('Amoxicilline / Acide clavulanique', 60, 140);
+
+    ctx.fillStyle = '#475569';
+    ctx.font = '16px sans-serif';
+    ctx.fillText('Poudre pour suspension buvable en sachet-dose', 60, 180);
+    ctx.fillText('Boîte de 12 sachets - Voie orale', 60, 210);
+
+    // Code CIP et fabricant
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '12px monospace';
+    ctx.fillText('CIP: 3274241 | GSK GlaxoSmithKline', 60, 310);
+
+    canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        const fakeFile = new File([blob], 'boite_augmentin_1g.jpg', { type: 'image/jpeg' });
+        await uploadAndScanMedicationBox(fakeFile, "AUGMENTIN, 1G, POUDRE");
+    }, 'image/jpeg');
+}
+
 // Initialisation au chargement
 window.addEventListener('DOMContentLoaded', () => {
     initMap();
     setupUniversalAudioRecording();
+    setupCameraAndVision();
 });
