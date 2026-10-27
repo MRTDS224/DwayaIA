@@ -45,12 +45,14 @@ challenge1/
 │   └── test_api.py               # Tests d'intégration des endpoints FastAPI
 │
 ├── rapport_donnees_challenge1.pdf# Rapport de cadrage 1 page (Données & Architecture)
-└── memo_technique_nlp.pdf        # Mémo technique d'ingénierie 1 page
+├── memo_technique_nlp.pdf        # Mémo technique d'ingénierie 1 page
+├── presentation_slides.pdf       # Support de soutenance Beamer 16:9 (4 diapositives)
+└── presentation_slides.tex       # Source LaTeX Beamer
 ```
 
 ---
 
-## 🛠️ Endpoints REST Disponibles (`/api/*`)
+## 🛠️ Endpoints REST Disponibles (`/api/*` & `/vision/*`)
 
 | Méthode | Route | Description |
 | :--- | :--- | :--- |
@@ -62,6 +64,7 @@ challenge1/
 | `POST` | `/api/pharmacies/availability` | Localisation d'officines proches et de garde par coordonnées GPS ou ville. |
 | `POST` | `/api/audio/tts` | Synthèse vocale haute fidélité (retourne un flux audio MP3 naturel). |
 | `POST` | `/api/audio/transcribe` | Transcription d'un fichier audio enregistré depuis le micro navigateur. |
+| `POST` | `/vision/recognize` | Reconnaissance visuelle de boîte par photo/upload (RoI, CLAHE, OCR bilingue et matching CNOPS). |
 
 ---
 

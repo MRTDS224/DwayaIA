@@ -70,3 +70,4 @@ def test_api_catalog_drug_by_id():
     assert "nom" in json_data
     assert "ppv" in json_data
     assert "alternatives_generiques" in json_data
+

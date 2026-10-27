@@ -28,3 +28,4 @@ def test_dosage_and_units_extraction():
     assert len(res["all_tokens"]) >= 3
     assert any("1000" in d for d in res["detected_dosages"])
     assert res["conf_ocr"] >= 0.80
+

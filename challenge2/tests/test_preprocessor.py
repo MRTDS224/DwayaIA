@@ -66,3 +66,4 @@ def test_full_preprocessing_pipeline(sample_medicine_image):
     assert "skew_angle" in res
     assert "processed_base64" in res
     assert res["processed_base64"].startswith("data:image/jpeg;base64,")
+

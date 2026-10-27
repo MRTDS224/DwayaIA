@@ -127,3 +127,4 @@ class BilingualOCREngine:
 
 # Instance singleton
 ocr_engine = BilingualOCREngine()
+

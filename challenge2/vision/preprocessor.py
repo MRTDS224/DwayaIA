@@ -251,3 +251,4 @@ class ImagePreprocessor:
 
 # Instance singleton
 preprocessor = ImagePreprocessor()
+
