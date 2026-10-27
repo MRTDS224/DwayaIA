@@ -52,15 +52,21 @@ class DrugDetail(DrugSummary):
 class PharmacySummary(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    id: str
-    title: str
+    id: Optional[str] = None
+    title: Optional[str] = None
+    name: Optional[str] = None
     phone: Optional[str] = Field(None, validation_alias="Phone")
     address: Optional[str] = None
     ville: Optional[str] = Field(None, validation_alias="Ville")
+    city: Optional[str] = None
     garde: Optional[str] = ""
-    lat: float
-    lng: float
+    is_garde: Optional[bool] = False
+    lat: Optional[float] = None
+    lng: Optional[float] = None
     distance_km: Optional[float] = None
+    whatsapp_url: Optional[str] = None
+    phone_url: Optional[str] = None
+    maps_url: Optional[str] = None
 
 class AvailabilityRequest(BaseModel):
     cip_code: Optional[str] = None
@@ -71,9 +77,10 @@ class AvailabilityRequest(BaseModel):
     limit: int = 10
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = ""
     lat: Optional[float] = None
     lng: Optional[float] = None
+    image_base64: Optional[str] = None
 
 class ChatResponse(BaseModel):
     reply_text: str
@@ -84,5 +91,7 @@ class ChatResponse(BaseModel):
     alternatives: List[DrugSummary] = []
     pharmacies: List[PharmacySummary] = []
     safety_alert: Optional[str] = None
+    model_used: Optional[str] = None
+    is_llm: Optional[bool] = False
     disclaimer: str = "Assistant informatif logistique et tarifaire. Ne remplace pas la prescription d'un médecin ni le conseil du pharmacien."
 

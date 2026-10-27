@@ -2,9 +2,10 @@
 Point d'entrée principal FastAPI pour le Challenge 1 (Assistant Pharmacie)
 Expose les 5 endpoints REST modulaires et sert l'interface utilisateur SPA.
 """
+import base64
 from pathlib import Path
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Response
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +21,8 @@ from challenge1.app.core.nlu_engine import nlu_engine
 from challenge1.app.services.catalog_service import catalog_service
 from challenge1.app.services.pharmacy_service import pharmacy_service
 from challenge1.app.services.audio_service import audio_service
+from challenge1.app.services.gemini_service import gemini_service
+from challenge2.vision.service import vision_service
 from challenge2.vision.routes import router as vision_router
 
 app = FastAPI(
@@ -142,15 +145,12 @@ async def get_pharmacies(req: AvailabilityRequest):
 @app.post("/api/chat", response_model=ChatResponse, tags=["Orchestration Conversationnelle"])
 async def chat_interaction(req: ChatRequest):
     """
-    Orchestration complète :
-    1. Détection des urgences médicales (SAMU 150)
-    2. Analyse NLU (Intent + Entités)
-    3. Résolution dans le catalogue CNOPS (5 918 médicaments)
-    4. Récupération des alternatives génériques si pertinent
-    5. Géolocalisation des pharmacies de garde / proches
-    6. Formulation d'une réponse claire et structurée
+    Orchestration conversationnelle multimodale :
+    1. Détection des urgences médicales prioritaires (SAMU 141 / 15)
+    2. Analyse multimodale Gemini (Darija, Arabe, Français, Image) si disponible
+    3. Fallback déterministe local (NLU + CNOPS + Pharmacies)
     """
-    # 1. Vérification des urgences
+    # 1. Vérification des urgences médicales
     emergency_msg = nlu_engine.check_emergency(req.message)
     if emergency_msg:
         parse_res = nlu_engine.parse(req.message)
@@ -162,7 +162,65 @@ async def chat_interaction(req: ChatRequest):
             safety_alert=emergency_msg
         )
 
-    # 2. Analyse NLU
+    # Décodage éventuel de l'image base64
+    img_bytes = None
+    detected_drug_dict = None
+    if req.image_base64:
+        try:
+            # Enlève le préfixe data:image/...;base64, si présent
+            clean_b64 = req.image_base64.split(",")[-1]
+            img_bytes = base64.b64decode(clean_b64)
+            # Reconnaissance locale CNOPS par vision
+            vis_res = vision_service.process_medication_image(img_bytes)
+            detected_drug_dict = vis_res.get("matched_drug")
+        except Exception as e:
+            print(f"[!] Erreur décodage image base64: {e}")
+
+    # 2. Utilisation de Gemini si configuré
+    if gemini_service.is_available:
+        try:
+            llm_res = gemini_service.generate_multimodal_reply(
+                user_message=req.message,
+                image_bytes=img_bytes,
+                user_lat=req.lat,
+                user_lon=req.lng,
+                detected_drug=detected_drug_dict,
+            )
+            if llm_res.get("is_llm"):
+                # Conversion du drug formaté pour la réponse
+                matched_summary = None
+                raw_drug = llm_res.get("matched_drug")
+                if raw_drug:
+                    matched_summary = DrugSummary(
+                        code=str(raw_drug.get("code") or raw_drug.get("cip") or ""),
+                        nom=raw_drug.get("nom", ""),
+                        dci=raw_drug.get("dci", ""),
+                        dosage=str(raw_drug.get("dosage", "")),
+                        unite_dosage=str(raw_drug.get("unite_dosage", "")),
+                        forme=raw_drug.get("forme", ""),
+                        presentation=raw_drug.get("presentation", ""),
+                        ppv=float(raw_drug.get("ppv") or 0.0),
+                        princeps_generique="Générique" if raw_drug.get("is_generique") else "Princeps",
+                        taux_remboursement=str(raw_drug.get("taux_remboursement", "70%")),
+                    )
+
+                pharms = [PharmacySummary(**p) for p in llm_res.get("pharmacies", [])]
+                nlu_res = nlu_engine.parse(req.message)
+
+                return ChatResponse(
+                    reply_text=llm_res["text"],
+                    intent=nlu_res.intent,
+                    confidence=0.98,
+                    entities=nlu_res.entities,
+                    matched_drug=matched_summary,
+                    pharmacies=pharms,
+                    model_used=llm_res.get("model_used"),
+                    is_llm=True,
+                )
+        except Exception as e:
+            print(f"[!] Erreur exécution Gemini, bascule sur moteur local: {e}")
+
+    # 3. Moteur déterministe local de secours (NLU + Regex + CNOPS)
     nlu_res = nlu_engine.parse(req.message)
     intent = nlu_res.intent
     entities = nlu_res.entities
@@ -172,14 +230,27 @@ async def chat_interaction(req: ChatRequest):
     pharmacies = []
     reply_lines = []
 
-    # 3. Résolution du médicament si extrait
-    if entities.medication:
+    # Résolution médicament
+    if detected_drug_dict:
+        matched_drug = DrugSummary(
+            code=str(detected_drug_dict.get("cip") or detected_drug_dict.get("code") or ""),
+            nom=detected_drug_dict.get("nom", ""),
+            dci=detected_drug_dict.get("dci", ""),
+            dosage=str(detected_drug_dict.get("dosage", "")),
+            unite_dosage="",
+            forme=detected_drug_dict.get("forme", ""),
+            presentation="",
+            ppv=float(detected_drug_dict.get("ppv") or 0.0),
+            princeps_generique="Générique" if detected_drug_dict.get("is_generique") else "Princeps",
+            taux_remboursement="70%",
+        )
+    elif entities.medication:
         search_query = f"{entities.medication} {entities.dosage_val or ''} {entities.dosage_unit or ''} {entities.galenic_form or ''}".strip()
         candidates = catalog_service.search(search_query, limit=3)
         if candidates:
             matched_drug = DrugSummary(**candidates[0])
 
-    # 4. Traitement selon l'Intention
+    # Traitement selon l'Intention
     if intent == "ask_price_reimbursement":
         if matched_drug:
             reply_lines.append(f"Le prix public de vente (PPV) pour **{matched_drug.nom}** est de **{matched_drug.ppv:.2f} DH**.")
@@ -243,5 +314,32 @@ async def chat_interaction(req: ChatRequest):
         entities=entities,
         matched_drug=matched_drug,
         alternatives=alternatives,
-        pharmacies=pharmacies
+        pharmacies=pharmacies,
+        model_used="local-rules",
+        is_llm=False,
     )
+
+
+@app.post("/api/chat/multimodal", response_model=ChatResponse, tags=["Orchestration Conversationnelle"])
+async def chat_multimodal_multipart(
+    message: str = Form(""),
+    image: Optional[UploadFile] = File(None),
+    lat: Optional[float] = Form(None),
+    lng: Optional[float] = Form(None),
+):
+    """
+    Point d'entrée multipart pour l'upload direct d'une photo et d'une question simultanées.
+    """
+    img_b64 = None
+    if image:
+        content = await image.read()
+        if content:
+            img_b64 = base64.b64encode(content).decode("utf-8")
+
+    chat_req = ChatRequest(
+        message=message,
+        lat=lat,
+        lng=lng,
+        image_base64=img_b64,
+    )
+    return await chat_interaction(chat_req)

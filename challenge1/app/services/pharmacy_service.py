@@ -98,12 +98,67 @@ class PharmacyService:
 
         # Si l'utilisateur est à proximité, filtrer dans un rayon raisonnable (max_radius_km)
         close_results = [r for r in results if r["distance_km"] <= max_radius_km]
-        if close_results:
-            # Parmi les officines proches (dans la même agglomération), valoriser les gardes
-            close_results.sort(key=lambda x: (0 if x.get("garde") else 1, x["distance_km"]))
-            return close_results[:limit]
+        selected = close_results[:limit] if close_results else results[:limit]
 
-        return results[:limit]
+        if close_results:
+            selected.sort(key=lambda x: (0 if x.get("garde") else 1, x["distance_km"]))
+            selected = selected[:limit]
+
+        # Enrichissement avec URLs d'action rapide (WhatsApp, Appel, Itinéraire Google Maps)
+        enriched = []
+        for p in selected:
+            item = self._format_pharmacy(p)
+            enriched.append(item)
+
+        return enriched
+
+    def _format_pharmacy(self, p: Dict, drug_name: str = "") -> Dict:
+        """Standardise la fiche d'une pharmacie et génère les liens d'action directe."""
+        name = p.get("title") or p.get("Nom") or "Pharmacie"
+        raw_phone = str(p.get("Phone") or p.get("Tel") or "").strip()
+        address = p.get("address") or p.get("Adresse") or ""
+        city = p.get("Ville") or ""
+        plat = p.get("lat")
+        plng = p.get("lng")
+        distance = p.get("distance_km", 0.0)
+        is_garde = bool(p.get("garde"))
+
+        # Nettoyage numéro marocain pour URL WhatsApp et Appel
+        digits = "".join(c for c in raw_phone if c.isdigit())
+        int_phone = ""
+        if digits.startswith("0") and len(digits) == 10:
+            int_phone = "212" + digits[1:]
+        elif digits.startswith("212"):
+            int_phone = digits
+
+        # Message prérempli WhatsApp
+        wa_text = f"Salam, wach dwa {drug_name} disponible 3ndkom daba ?" if drug_name else "Salam, wach l-pharmacie maftou7a daba ?"
+        import urllib.parse
+        encoded_msg = urllib.parse.quote_plus(wa_text)
+
+        whatsapp_url = f"https://wa.me/{int_phone}?text={encoded_msg}" if int_phone else ""
+        phone_url = f"tel:+{int_phone}" if int_phone else (f"tel:{raw_phone}" if raw_phone else "")
+        maps_url = f"https://www.google.com/maps/dir/?api=1&destination={plat},{plng}" if plat and plng else ""
+
+        return {
+            "id": p.get("id"),
+            "name": name,
+            "title": name,
+            "phone": raw_phone,
+            "Phone": raw_phone,
+            "address": address,
+            "city": city,
+            "ville": city,
+            "Ville": city,
+            "is_garde": is_garde,
+            "garde": p.get("garde", ""),
+            "lat": plat,
+            "lng": plng,
+            "distance_km": distance,
+            "whatsapp_url": whatsapp_url,
+            "phone_url": phone_url,
+            "maps_url": maps_url,
+        }
 
 # Instance singleton partagée
 pharmacy_service = PharmacyService()

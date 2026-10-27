@@ -47,3 +47,26 @@ def test_api_chat_orchestrator():
     assert data["matched_drug"] is not None
     assert "AUGMENTIN" in data["matched_drug"]["nom"]
 
+def test_api_pharmacies_with_quick_actions():
+    res = client.post("/api/pharmacies/availability", json={"city": "Casablanca", "limit": 3})
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data) > 0
+    p = data[0]
+    assert "maps_url" in p
+    assert "phone_url" in p
+    assert "whatsapp_url" in p
+
+def test_api_chat_multimodal_multipart():
+    from pathlib import Path
+    sample_img = Path("challenge2/data/samples/doliprane_1000mg.webp")
+    if sample_img.exists():
+        with open(sample_img, "rb") as f:
+            files = {"image": ("doliprane.webp", f.read(), "image/webp")}
+            data = {"message": "Chhal dayr had dwa f pharmacie ?"}
+            res = client.post("/api/chat/multimodal", data=data, files=files)
+            assert res.status_code == 200
+            res_data = res.json()
+            assert res_data["matched_drug"] is not None
+            assert "DOLIPRANE" in res_data["matched_drug"]["nom"].upper()
+
