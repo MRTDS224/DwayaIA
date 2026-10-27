@@ -54,6 +54,9 @@ class ProductMatcher:
         cleaned_query = self.normalize_text_for_matching(query_str)
         target_dosage = self.extract_dosage(query_str)
 
+        # Extraction des mots individuels de la requête pour détection directe de la marque
+        query_words = set(re.findall(r"\b\w+\b", cleaned_query))
+
         if not cleaned_query.strip():
             return {
                 "status": "rejected",
@@ -79,28 +82,47 @@ class ProductMatcher:
                 norm_dci = self.normalize_text_for_matching(drug_dci)
                 dci_ratio = fuzz.token_set_ratio(cleaned_query, norm_dci) / 100.0
 
-            sim_score = max(base_ratio, dci_ratio * 0.9)
+            # Vérification de présence exacte ou quasi-exacte du nom de marque
+            primary_brand_token = self.normalize_text_for_matching(drug["nom"].split()[0])
+            brand_in_query = (
+                primary_brand_token in query_words
+                or (len(primary_brand_token) >= 4 and fuzz.partial_ratio(primary_brand_token, cleaned_query) >= 90)
+            )
+
+            # Priorité absolue au nom commercial (Brand name)
+            if brand_in_query and base_ratio >= 0.50:
+                sim_score = base_ratio * 0.85 + dci_ratio * 0.15 + 0.10
+            elif base_ratio >= 0.65:
+                sim_score = base_ratio * 0.8 + dci_ratio * 0.2
+            else:
+                # Si le nom commercial ne correspond pas, plafonner le score DCI
+                sim_score = min(0.55, dci_ratio * 0.6 + base_ratio * 0.4)
 
             # Bonus / Malus de désambiguïsation par Dosage
             if target_dosage:
                 target_num_match = re.search(r"\b(\d+(?:[.,]\d+)?)\b", target_dosage)
                 target_num = target_num_match.group(1) if target_num_match else ""
-                drug_dosage_val = str(drug.get("dosage", "")).strip().split(".")[0]
+                drug_dosage_raw = str(drug.get("dosage", "")).strip()
+                drug_dosage_parts = [p.strip().split(".")[0] for p in drug_dosage_raw.split("/") if p.strip()]
                 drug_unit_val = str(drug.get("unite_dosage", "")).strip().upper()
                 drug_nom_str = drug["nom"].upper()
 
-                if target_num and (target_num == drug_dosage_val or f" {target_num}" in drug_nom_str or f"{target_num}MG" in drug_nom_str):
-                    sim_score = min(1.0, sim_score + 0.25)
-                elif target_num == "1" and (drug_dosage_val == "1000" and "MG" in drug_unit_val):
-                    # Équivalence 1g = 1000mg
-                    sim_score = min(1.0, sim_score + 0.25)
-                elif target_num == "1000" and (drug_dosage_val == "1" and "G" in drug_unit_val):
-                    # Équivalence 1000mg = 1g
-                    sim_score = min(1.0, sim_score + 0.25)
-                elif target_num and drug_dosage_val and target_num != drug_dosage_val:
-                    # Malus si le dosage ne correspond pas
-                    sim_score = max(0.2, sim_score - 0.15)
+                dosage_matches = (
+                    target_num in drug_dosage_parts
+                    or f" {target_num}" in drug_nom_str
+                    or f"{target_num}MG" in drug_nom_str
+                    or f"{target_num}G" in drug_nom_str
+                    or (target_num == "1" and ("1000" in drug_dosage_parts and "MG" in drug_unit_val))
+                    or (target_num == "1000" and ("1" in drug_dosage_parts and "G" in drug_unit_val))
+                )
 
+                if dosage_matches:
+                    sim_score = min(1.0, sim_score + 0.15)
+                elif target_num and drug_dosage_parts and target_num not in drug_dosage_parts:
+                    # Malus si le dosage ne correspond pas
+                    sim_score = max(0.1, sim_score - 0.20)
+
+            sim_score = min(1.0, max(0.0, sim_score))
             if sim_score >= 0.40:
                 scored_candidates.append((sim_score, drug))
 
