@@ -11,9 +11,9 @@ import urllib.parse
 import ssl
 import os
 
-# Configuration API
+# Configuration API sécurisée via variable d'environnement
 API_URL = "https://saydalia.ma/api/siteweb_api.php"
-API_KEY = "808RBAI77YIO2HZQ9WYSJKHK9WDEVVXXERFB77CALCU6U0"
+API_KEY = os.getenv("SAYDALIA_API_KEY", "")
 OUTPUT_JSON = "challenge1/data/pharmacies_maroc.json"
 
 # Liste de coordonnées centrales des principales villes marocaines
