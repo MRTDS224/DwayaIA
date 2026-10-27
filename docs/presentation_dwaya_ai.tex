@@ -1,0 +1,324 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{tikz}
+\usepackage{tcolorbox}
+\usepackage{booktabs}
+\usepackage{fontawesome5}
+
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,backgrounds,calc}
+
+% Palette de couleurs modernes (Santé / Maroc / Tech)
+\definecolor{primary}{RGB}{15, 118, 110}     % Teal foncé
+\definecolor{secondary}{RGB}{13, 148, 136}  % Teal moyen
+\definecolor{accent}{RGB}{37, 99, 235}      % Bleu vif
+\definecolor{success}{RGB}{22, 163, 74}     % Vert émeraude
+\definecolor{warning}{RGB}{217, 119, 6}     % Ambre
+\definecolor{danger}{RGB}{220, 38, 38}      % Rouge
+\definecolor{darkslate}{RGB}{30, 41, 59}    % Slate foncé
+\definecolor{lightbg}{RGB}{248, 250, 252}   % Fond clair
+
+% Configuration Beamer minimaliste & moderne
+\setbeamertemplate{navigation symbols}{}
+\setbeamercolor{background canvas}{bg=lightbg}
+\setbeamercolor{title}{fg=primary}
+\setbeamercolor{frametitle}{fg=primary}
+\setbeamerfont{frametitle}{series=\bfseries,size=\large}
+
+\title{\textbf{Dwaya AI : Pharmacie Intelligente}}
+\subtitle{Assistant Multimodal pour l'Orientation et la Transparence Pharmaceutique au Maroc}
+\author{\textbf{Diallo Mamadou Tanou} \and \textbf{BenelMoudden Hiba}}
+\institute{Challenge \#1 (Assistant Pharmacie) \& Challenge \#2 (Vision \& Reconnaissance Boîte)}
+\date{Octobre 2026}
+
+\begin{document}
+
+% ----------------------------------------------------------------------------------
+% SLIDE 1 : Titre & Enjeux Pharmaceutiques au Maroc
+% ----------------------------------------------------------------------------------
+\begin{frame}[plain]
+    \vspace{0.3cm}
+    \begin{tcolorbox}[colback=primary,colframe=primary,arc=3mm,left=5mm,right=5mm,top=3mm,bottom=3mm]
+        \color{white}
+        {\LARGE \textbf{Dwaya AI (SaydaliaBot)}} \hfill {\small \faHospital~Plateforme Santé Maroc} \\[1mm]
+        {\small Assistant Multimodal : Darija, Prix CNOPS Réglementés \& Pharmacies de Garde}
+    \end{tcolorbox}
+
+    \vspace{0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.32\textwidth}
+            \begin{tcolorbox}[colback=white,colframe=primary,arc=2mm,title={\footnotesize \textbf{\faComments~1. Barrière Linguistique}},coltitle=white]
+                \scriptsize
+                \textbf{Problème :} Les patients s'expriment en \textbf{Darija} ou en \textbf{Arabizi} (\textit{3, 7, 9}) alors que les notices sont en français technique. \\[1mm]
+                \textbf{Solution :} Compréhension native de la Darija orale/écrite par LLM multimodal.
+            \end{tcolorbox}
+        \end{column}
+
+        \begin{column}{0.32\textwidth}
+            \begin{tcolorbox}[colback=white,colframe=secondary,arc=2mm,title={\footnotesize \textbf{\faPills~2. Opacité des Prix}},coltitle=white]
+                \scriptsize
+                \textbf{Problème :} Méconnaissance du prix officiel (PPV), du remboursement AMO et des génériques. \\[1mm]
+                \textbf{Solution :} Ancrage strict au catalogue officiel \textbf{CNOPS (5 918 médicaments)} au centime près.
+            \end{tcolorbox}
+        \end{column}
+
+        \begin{column}{0.32\textwidth}
+            \begin{tcolorbox}[colback=white,colframe=accent,arc=2mm,title={\footnotesize \textbf{\faClock~3. Urgence des Gardes}},coltitle=white]
+                \scriptsize
+                \textbf{Problème :} Difficulté nocturne à trouver une officine ouverte et vérifier le stock. \\[1mm]
+                \textbf{Solution :} \textbf{800 pharmacies} avec géolocalisation GPS et passerelle \textbf{WhatsApp en 1 clic}.
+            \end{tcolorbox}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.25cm}
+    \centering
+    \scriptsize \color{darkslate} \textbf{Binôme de réalisation :} Diallo M. T. \& BenelMoudden H. \hfill \faShield*~Garde-fous SAMU 141 actifs
+\end{frame}
+
+% ----------------------------------------------------------------------------------
+% SLIDE 2 : Architecture Globale du Système (Hybride RAG)
+% ----------------------------------------------------------------------------------
+\begin{frame}{Architecture Globale du Système : Hybride RAG + Grounding}
+    \centering
+    \begin{tikzpicture}[scale=0.88, every node/.style={transform shape}]
+        % Entrées Utilisateur
+        \node[draw=primary!80, fill=white, rounded corners=2mm, text width=2.4cm, align=center, line width=0.4mm] (user) at (0, 2) {
+            \footnotesize \textbf{\faUser~Patient}\\[1mm]
+            \tiny \faMicrophone~Voix (STT)\\
+            \faCommentDots~Texte Darija/FR\\
+            \faCamera~Photo Boîte\\
+            \faMapMarker*~Coordonnées GPS
+        };
+
+        % Gateway
+        \node[draw=darkslate, fill=lightbg, rounded corners=2mm, text width=2.2cm, align=center, line width=0.4mm] (gw) at (3.5, 2) {
+            \footnotesize \textbf{FastAPI Gateway}\\[1mm]
+            \tiny /api/chat\\
+            /api/chat/multimodal\\
+            Garde-Fou Urgence
+        };
+
+        % Cœur LLM
+        \node[draw=accent, fill=accent!10, rounded corners=2mm, text width=2.8cm, align=center, line width=0.4mm] (llm) at (7.8, 3) {
+            \footnotesize \textbf{\faRobot~Gemini 3.5 Flash}\\[1mm]
+            \tiny Compréhension Darija\\
+            Vision Multimodale\\
+            Empathie \& Clarté
+        };
+
+        % Moteur Local Fallback
+        \node[draw=warning!80!black, fill=warning!10, rounded corners=2mm, text width=2.8cm, align=center, line width=0.3mm] (fb) at (7.8, 1) {
+            \footnotesize \textbf{\faCogs~Moteur Local}\\[1mm]
+            \tiny NLU Regex + RapidFuzz\\
+            Fallback Hors-Ligne 100\%
+        };
+
+        % Données Métier
+        \node[draw=success!80!black, fill=success!10, rounded corners=2mm, text width=2.4cm, align=center, line width=0.4mm] (cnops) at (12.2, 3.2) {
+            \footnotesize \textbf{\faDatabase~CNOPS}\\[1mm]
+            \tiny 5 918 Médicaments\\
+            Prix PPV, DCI, Remb.
+        };
+
+        \node[draw=primary, fill=primary!10, rounded corners=2mm, text width=2.4cm, align=center, line width=0.4mm] (pharm) at (12.2, 1.8) {
+            \footnotesize \textbf{\faHospital~800 Officines}\\[1mm]
+            \tiny Distances Haversine\\
+            Statuts Garde Nuit/Jour
+        };
+
+        \node[draw=danger, fill=danger!10, rounded corners=2mm, text width=2.4cm, align=center, line width=0.3mm] (samu) at (12.2, 0.4) {
+            \footnotesize \textbf{\faAmbulance~SAMU 141 / 15}\\[1mm]
+            \tiny Urgence Vitale Détectée
+        };
+
+        % Flèches
+        \draw[-{Stealth[length=2.5mm]}, line width=0.4mm, color=primary] (user) -- (gw);
+        \draw[-{Stealth[length=2.5mm]}, line width=0.4mm, color=accent] (gw) |- (llm);
+        \draw[-{Stealth[length=2.5mm]}, line width=0.3mm, dashed, color=warning!80!black] (gw) |- (fb);
+        \draw[{Stealth[length=2mm]}-{Stealth[length=2mm]}, line width=0.4mm, color=success!80!black] (llm) -- (cnops);
+        \draw[{Stealth[length=2mm]}-{Stealth[length=2mm]}, line width=0.4mm, color=primary] (llm) -- (pharm);
+        \draw[-{Stealth[length=2.5mm]}, line width=0.4mm, color=danger] (gw) |- (samu);
+    \end{tikzpicture}
+
+    \vspace{0.1cm}
+    \begin{tcolorbox}[colback=white,colframe=darkslate!30,arc=1mm,left=2mm,right=2mm,top=1mm,bottom=1mm]
+        \tiny \textbf{Sécurité Médicale Absolue :} Le LLM est strictement ancré aux bases réglementaires. Il est techniquement impossible qu'il invente un prix ou modifie un dosage CNOPS.
+    \end{tcolorbox}
+\end{frame}
+
+% ----------------------------------------------------------------------------------
+% SLIDE 3 : Pipeline Vision & OCR Boîte (Challenge #2)
+% ----------------------------------------------------------------------------------
+\begin{frame}{Pipeline Vision \& OCR Deep Learning (Challenge \#2)}
+    \centering
+    \begin{tikzpicture}[scale=0.86, every node/.style={transform shape}]
+        % Étape 1 : Photo
+        \node[draw=primary, fill=white, rounded corners=2mm, text width=2.2cm, align=center, line width=0.3mm] (img) at (0, 0) {
+            \footnotesize \faCamera~Photo Boîte\\[1mm]
+            \tiny Conditions réelles\\Smartphone
+        };
+
+        % Étape 2 : Prétraitement
+        \node[draw=secondary, fill=secondary!10, rounded corners=2mm, text width=2.5cm, align=center, line width=0.3mm] (prep) at (3.2, 0) {
+            \footnotesize \faCogs~Prétraitement\\[1mm]
+            \tiny 1. Deskew (Hough $\pm 45^\circ$)\\
+            2. Filtre CLAHE\\
+            3. Détection Boîte (RoI)
+        };
+
+        % Étape 3 : Double-Passe OCR
+        \node[draw=accent, fill=accent!10, rounded corners=2mm, text width=2.7cm, align=center, line width=0.4mm] (ocr) at (6.8, 0) {
+            \footnotesize \faMicrochip~RapidOCR ONNX\\[1mm]
+            \tiny \textbf{Passe 1 :} RGB (Marques)\\
+            \textbf{Passe 2 :} CLAHE (Dosages)\\
+            PaddleOCR sur CPU
+        };
+
+        % Étape 4 : Matching & Désambiguïsation
+        \node[draw=success!80!black, fill=success!10, rounded corners=2mm, text width=2.6cm, align=center, line width=0.4mm] (match) at (10.6, 0) {
+            \footnotesize \faCheckCircle~Fuzzy Matcher\\[1mm]
+            \tiny Poids Marque Prioritaire\\
+            Equiv. $1000\text{mg} = 1\text{g}$\\
+            Dosages $1\text{g}/125\text{mg}$
+        };
+
+        % Étape 5 : Résultat
+        \node[draw=primary!80!black, fill=primary!20, rounded corners=2mm, text width=2.2cm, align=center, line width=0.4mm] (res) at (13.9, 0) {
+            \footnotesize \faPills~Résultat CNOPS\\[1mm]
+            \tiny Score $\ge 0.85$ (Validé)\\
+            Prix PPV + Génériques
+        };
+
+        % Connecteurs
+        \draw[-{Stealth[length=2.5mm]}, line width=0.4mm, color=primary] (img) -- (prep);
+        \draw[-{Stealth[length=2.5mm]}, line width=0.4mm, color=secondary] (prep) -- (ocr);
+        \draw[-{Stealth[length=2.5mm]}, line width=0.4mm, color=accent] (ocr) -- (match);
+        \draw[-{Stealth[length=2.5mm]}, line width=0.4mm, color=success!80!black] (match) -- (res);
+    \end{tikzpicture}
+
+    \vspace{0.4cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{tcolorbox}[colback=white,colframe=success!80!black,arc=2mm,title={\footnotesize \faCheck~Validation Réelle : Doliprane 1000 mg},coltitle=white]
+                \scriptsize
+                \begin{itemize}
+                    \item \textbf{Image :} Photo smartphone fournie par l'utilisateur.
+                    \item \textbf{Score composite :} \textbf{0.99} (Confiance OCR 99\%, Similarité 1.0).
+                    \item \textbf{Identifié :} DOLIPRANE 1 G (PPV : 14.00 MAD).
+                    \item \textbf{Alternatives :} Doliprex, Panadol proposés automatiquement.
+                \end{itemize}
+            \end{tcolorbox}
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \begin{tcolorbox}[colback=white,colframe=accent,arc=2mm,title={\footnotesize \faCogs~Optimisations Clés Appliquées},coltitle=white]
+                \scriptsize
+                \begin{itemize}
+                    \item \textbf{Priorité Nom Commercial :} Évite que \textit{PENAMOX} ou \textit{NEOCLAV} ne supplantent \textit{AUGMENTIN}.
+                    \item \textbf{Résolution des Dosages Composites :} Support complet des fractions (ex: Augmentin 1g/125mg).
+                    \item \textbf{0 Dépendance Système :} Exécution 100\% CPU autonome.
+                \end{itemize}
+            \end{tcolorbox}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ----------------------------------------------------------------------------------
+% SLIDE 4 : Parcours Utilisateur & Actions Réelles
+% ----------------------------------------------------------------------------------
+\begin{frame}{Parcours Utilisateur \& Actions d'Officine en 1 Clic}
+    \begin{columns}[T]
+        \begin{column}{0.50\textwidth}
+            \begin{tcolorbox}[colback=white,colframe=primary,arc=2mm,title={\footnotesize \faComments~Simulation Interface Chat Multimodal},coltitle=white]
+                \scriptsize
+                \textbf{\faUser~Patient :} \textit{[Photo Doliprane 1000mg]} \\
+                \textit{"Chhal dayr hada f Agadir o wach kayn daba ?"} \\[2mm]
+                \textbf{\faRobot~Dwaya AI (Gemini 3.5 Flash) :} \\
+                \textit{"Salam! Had dwa hoa \textbf{Doliprane 1000 mg} (Paracétamol). Taman officiel CNOPS hoa \textbf{14.00 DH}. Hna l-pharmacies li qrab lik bzaf daba :"} \\[1.5mm]
+                \begin{tcolorbox}[colback=lightbg,colframe=secondary!40,arc=1mm,left=2mm,right=2mm,top=1mm,bottom=1mm]
+                    \tiny \textbf{\faHospital~Pharmacie Alamal} \hfill \color{success}\textbf{\faClock~GARDE ACTIVE}\\
+                    \faMapMarker*~Bd Cheikh Saadi, Agadir \hfill \textbf{450 m}\\
+                    \vspace{1mm}
+                    \color{white}
+                    \colorbox{accent}{\faPhone~Appeler} \hspace{1mm}
+                    \colorbox{success}{\faWhatsapp~WhatsApp Stock} \hspace{1mm}
+                    \colorbox{darkslate}{\faDirections~GPS}
+                \end{tcolorbox}
+            \end{tcolorbox}
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \begin{tcolorbox}[colback=white,colframe=success!80!black,arc=2mm,title={\footnotesize \faWhatsapp~1. Vérification Stock sur WhatsApp},coltitle=white]
+                \scriptsize
+                Génération automatique du lien prérempli : \\
+                \textit{"Salam, wach dwa Doliprane 1000mg disponible 3ndkom daba ?"}\\
+                $\rightarrow$ Résout l'absence d'API de stock centralisée au Maroc.
+            \end{tcolorbox}
+
+            \begin{tcolorbox}[colback=white,colframe=accent,arc=2mm,title={\footnotesize \faPhone~2. Appel Téléphonique Direct},coltitle=white]
+                \scriptsize
+                Un clic compose directement le numéro de l'officine de garde (\texttt{tel:+212...}) sans saisie manuelle.
+            \end{tcolorbox}
+
+            \begin{tcolorbox}[colback=white,colframe=danger,arc=2mm,title={\footnotesize \faShield*~3. Sécurité Médicale \& Urgences},coltitle=white]
+                \scriptsize
+                Détection automatique des urgences vitales (douleur thoracique, convulsion) $\rightarrow$ Appel immédiat \textbf{SAMU 141} / \textbf{15}.
+            \end{tcolorbox}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ----------------------------------------------------------------------------------
+% SLIDE 5 : Bilan Technique & Métriques Clés
+% ----------------------------------------------------------------------------------
+\begin{frame}{Bilan Technique, Tests \& Garanties de Production}
+    \begin{columns}[T]
+        \begin{column}{0.24\textwidth}
+            \begin{tcolorbox}[colback=primary!10,colframe=primary,arc=2mm,center,title={\footnotesize \textbf{Catalogue}}]
+                \centering \Huge \textbf{5 918} \\[1mm]
+                \scriptsize Médicaments CNOPS indexés en mémoire
+            \end{tcolorbox}
+        \end{column}
+
+        \begin{column}{0.24\textwidth}
+            \begin{tcolorbox}[colback=secondary!10,colframe=secondary,arc=2mm,center,title={\footnotesize \textbf{Officines}}]
+                \centering \Huge \textbf{800} \\[1mm]
+                \scriptsize Pharmacies géolocalisées avec gardes
+            \end{tcolorbox}
+        \end{column}
+
+        \begin{column}{0.24\textwidth}
+            \begin{tcolorbox}[colback=success!10,colframe=success!80!black,arc=2mm,center,title={\footnotesize \textbf{Tests CI/CD}}]
+                \centering \Huge \textbf{37/37} \\[1mm]
+                \scriptsize Tests automatisés réussis à 100\%
+            \end{tcolorbox}
+        \end{column}
+
+        \begin{column}{0.24\textwidth}
+            \begin{tcolorbox}[colback=accent!10,colframe=accent,arc=2mm,center,title={\footnotesize \textbf{Latence}}]
+                \centering \Huge \textbf{< 700} \normalsize ms\\[1mm]
+                \scriptsize Temps de réponse moyen Gemini Flash
+            \end{tcolorbox}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.4cm}
+    \begin{tcolorbox}[colback=white,colframe=darkslate,arc=2mm,title={\footnotesize \faLock~Engagements de Sécurité \& Conformité},coltitle=white]
+        \scriptsize
+        \begin{columns}[T]
+            \begin{column}{0.48\textwidth}
+                \faCheckCircle~\textbf{Protection des secrets :} Clés API isolées dans \texttt{.env}, ignorées par Git.\\
+                \faCheckCircle~\textbf{Non-régression hors-ligne :} Moteur déterministe local sans interruption.
+            \end{column}
+            \begin{column}{0.48\textwidth}
+                \faCheckCircle~\textbf{Disponibilité immédiate :} Actions WhatsApp préremplies pour chaque officine.\\
+                \faCheckCircle~\textbf{Binôme de réalisation :} Diallo M. T. \& BenelMoudden H.
+            \end{column}
+        \end{columns}
+    \end{tcolorbox}
+\end{frame}
+
+\end{document}

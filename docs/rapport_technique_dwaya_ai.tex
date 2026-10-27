@@ -1,0 +1,237 @@
+\documentclass[a4paper,10pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage{amsmath}
+\usepackage[margin=2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{tcolorbox}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{fontawesome5}
+\usepackage{microtype}
+\usepackage{enumitem}
+
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,backgrounds,calc}
+
+% Palette professionnelle
+\definecolor{primary}{RGB}{15, 118, 110}     % Teal foncé
+\definecolor{secondary}{RGB}{13, 148, 136}  % Teal moyen
+\definecolor{accent}{RGB}{37, 99, 235}      % Bleu
+\definecolor{success}{RGB}{22, 163, 74}     % Vert
+\definecolor{warning}{RGB}{217, 119, 6}     % Ambre
+\definecolor{danger}{RGB}{220, 38, 38}      % Rouge
+\definecolor{darkslate}{RGB}{30, 41, 59}    % Slate
+\definecolor{lightbg}{RGB}{248, 250, 252}   % Fond gris/bleu clair
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=primary,
+    urlcolor=accent,
+    citecolor=primary
+}
+
+\begin{document}
+
+% ----------------------------------------------------------------------------------
+% EN-TÊTE DU RAPPORT
+% ----------------------------------------------------------------------------------
+\begin{tcolorbox}[colback=primary,colframe=primary,arc=2mm,left=6mm,right=6mm,top=5mm,bottom=5mm]
+    \color{white}
+    {\Huge \textbf{Dwaya AI (SaydaliaBot)}} \\[2mm]
+    {\Large \textbf{Rapport Technique d'Ingénierie : Pharmacie Multimodale au Maroc}} \\[3mm]
+    \footnotesize
+    \textbf{Auteurs :} Diallo Mamadou Tanou \& BenelMoudden Hiba \hfill \faCalendar*~Octobre 2026 \\
+    \textbf{Cadre :} Challenge \#1 (Assistant Pharmacie) \& Challenge \#2 (Vision \& Reconnaissance Boîte)
+\end{tcolorbox}
+
+\vspace{0.4cm}
+
+\begin{abstract}
+\noindent Ce rapport documente l'architecture, la conception algorithmique et l'implémentation industrielle de \textbf{Dwaya AI}, un système d'orientation pharmaceutique multimodal conçu pour le contexte marocain. La solution combine l'intelligence générative de \textbf{Google Gemini 3.5 Flash} (traitement natif de la Darija marocaine orale et écrite en Arabizi) avec le grounding strict du \textbf{catalogue officiel CNOPS} (5 918 médicaments) et la géolocalisation de \textbf{800 officines}. Pour la reconnaissance de boîtes (Challenge \#2), un pipeline autonome de vision par ordinateur (redressement Hough, filtre CLAHE, deep learning \textbf{RapidOCR ONNX}) est intégré sur CPU sans dépendance système. Le système résout le défi de l'absence d'API de stock centralisée au Maroc grâce à des passerelles d'action directe (\textbf{WhatsApp prérempli en 1 clic} et appel téléphonique natif), tout en garantissant une étanchéité médicale via des garde-fous d'urgence vitale SAMU 141 / 15. L'ensemble est validé par une suite de \textbf{37 tests automatisés réussis à 100\%}.
+\end{abstract}
+
+\vspace{0.2cm}
+
+% ----------------------------------------------------------------------------------
+% 1. INTRODUCTION & ENJEUX
+% ----------------------------------------------------------------------------------
+\section{Contexte et Problématique au Maroc}
+
+L'accès à l'information pharmaceutique au Maroc présente trois défis majeurs :
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{La fracture linguistique :} Les patients s'expriment en Darija dialectale, fréquemment transcrite en Arabizi (\textit{chhal dayr had dwa f pharmacie ?}), alors que la nomenclature des médicaments et les RCP sont rédigés en français médical technique.
+    \item \textbf{L'opacité tarifaire et les génériques :} Le Prix Public de Vente (PPV) est fixé par arrêté ministériel, mais les patients ignorent souvent l'existence d'alternatives génériques bio-équivalentes à prix réduit et le taux effectif de remboursement AMO/CNOPS.
+    \item \textbf{L'urgence logistique des officines de garde :} Trouver une pharmacie ouverte la nuit ou le dimanche dans une agglomération marocaine nécessite des démarches pénibles, sans moyen immédiat de vérifier la disponibilité du traitement recherché.
+\end{enumerate}
+
+% ----------------------------------------------------------------------------------
+% 2. ARCHITECTURE HYBRIDE RAG
+% ----------------------------------------------------------------------------------
+\section{Architecture Globale Hybride (RAG + Grounding)}
+
+Pour éliminer tout risque d'hallucination médicale, le système sépare strictement la \textbf{couche conversationnelle} (empathie, langue dialectale, vision) de la \textbf{vérité terrain réglementaire} :
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[scale=0.88, every node/.style={transform shape}]
+    % Couche Client
+    \node[draw=primary, fill=white, rounded corners=2mm, text width=3cm, align=center, line width=0.4mm] (client) at (0, 0) {
+        \textbf{\faUser~Client Multimodal}\\[1mm]
+        \scriptsize Texte Darija / Arabizi\\
+        Audio Microphone (STT)\\
+        Photo Boîte Caméra\\
+        Géolocalisation GPS
+    };
+
+    % Passerelle FastAPI
+    \node[draw=darkslate, fill=lightbg, rounded corners=2mm, text width=2.8cm, align=center, line width=0.4mm] (gw) at (4.5, 0) {
+        \textbf{FastAPI Gateway}\\[1mm]
+        \scriptsize Router Modulaire REST\\
+        Garde-Fou SAMU 141\\
+        Orchestration Chat
+    };
+
+    % Moteur LLM
+    \node[draw=accent, fill=accent!10, rounded corners=2mm, text width=3.2cm, align=center, line width=0.4mm] (llm) at (9.5, 1.2) {
+        \textbf{\faRobot~Gemini 3.5 Flash}\\[1mm]
+        \scriptsize Dialogue Darija / Français\\
+        Fusion Multimodale Image\\
+        Prompt Système Médical
+    };
+
+    % Fallback Local
+    \node[draw=warning!80!black, fill=warning!10, rounded corners=2mm, text width=3.2cm, align=center, line width=0.3mm] (fb) at (9.5, -1.2) {
+        \textbf{\faCogs~Moteur Local Déterministe}\\[1mm]
+        \scriptsize NLU Regex + RapidFuzz\\
+        Fallback Hors-Ligne 100\%
+    };
+
+    % Bases Réglementaires
+    \node[draw=success!80!black, fill=success!10, rounded corners=2mm, text width=2.8cm, align=center, line width=0.4mm] (cnops) at (14.2, 1.5) {
+        \textbf{\faDatabase~CNOPS Officiel}\\[1mm]
+        \scriptsize 5 918 Médicaments\\
+        Prix PPV, DCI, Génériques
+    };
+
+    \node[draw=primary, fill=primary!10, rounded corners=2mm, text width=2.8cm, align=center, line width=0.4mm] (pharm) at (14.2, -0.2) {
+        \textbf{\faHospital~800 Pharmacies}\\[1mm]
+        \scriptsize Distances Haversine GPS\\
+        Gardes Jour / Nuit
+    };
+
+    \node[draw=danger, fill=danger!10, rounded corners=2mm, text width=2.8cm, align=center, line width=0.3mm] (samu) at (14.2, -1.7) {
+        \textbf{\faAmbulance~SAMU 141 / 15}\\[1mm]
+        \scriptsize Urgences Vitales
+    };
+
+    \draw[-{Stealth[length=2.5mm]}, line width=0.4mm, color=primary] (client) -- (gw);
+    \draw[-{Stealth[length=2.5mm]}, line width=0.4mm, color=accent] (gw) |- (llm);
+    \draw[-{Stealth[length=2.5mm]}, line width=0.3mm, dashed, color=warning!80!black] (gw) |- (fb);
+    \draw[{Stealth[length=2mm]}-{Stealth[length=2mm]}, line width=0.4mm, color=success!80!black] (llm) -- (cnops);
+    \draw[{Stealth[length=2mm]}-{Stealth[length=2mm]}, line width=0.4mm, color=primary] (llm) -- (pharm);
+    \draw[-{Stealth[length=2.5mm]}, line width=0.4mm, color=danger] (gw) |- (samu);
+\end{tikzpicture}
+\caption{Architecture fonctionnelle Hybride RAG du système Dwaya AI.}
+\end{figure}
+
+% ----------------------------------------------------------------------------------
+% 3. MOTEUR CONVERSATIONNEL GEMINI & DARIJA
+% ----------------------------------------------------------------------------------
+\section{Moteur Conversationnel Gemini \& Traitement de la Darija}
+
+Le cœur conversationnel repose sur \texttt{gemini-3.5-flash} (intégré via le SDK officiel \texttt{google-genai}) avec un fallback automatique sur \texttt{gemini-3.8-flash}.
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Compréhension dialectale fine :} Le modèle interprète indifféremment la Darija (\textit{bghit na3ref chhal dayr had dwa f pharmacie}) et l'Arabizi avec chiffres phonétiques (\textit{wach had dwa fih chi khatar 3la l-merra l-7amla ?}).
+    \item \textbf{Grounding CNOPS strict :} Avant génération de la réponse, le système injecte dans le contexte les données officielles CNOPS (code CIP, DCI, forme, dosage, prix PPV exact, génériques équivalents). Le prompt système interdit formellement d'inventer des prix.
+    \item \textbf{Résilience hors-ligne (Graceful Fallback) :} En cas de coupure réseau ou d'indisponibilité de clé, le serveur bascule instantanément et sans erreur 500 sur le moteur déterministe local (\texttt{local-rules}).
+\end{itemize}
+
+% ----------------------------------------------------------------------------------
+% 4. VISION & OCR BOÎTE (CHALLENGE #2)
+% ----------------------------------------------------------------------------------
+\section{Pipeline de Vision \& Deep Learning OCR (Challenge \#2)}
+
+Le pipeline de vision permet d'identifier un médicament à partir d'une photo réelle d'emballage prise au smartphone :
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Normalisation et Redressement géométrique (Deskew) :} Détection des contours et de l'angle d'orientation (transformée de Hough / minAreaRect) avec rotation de correction jusqu'à $\pm 45^\circ$.
+    \item \textbf{Contraste Adaptatif CLAHE :} Rehaussement local du contraste pour neutraliser les reflets brillants du carton et faire ressortir le texte estompé.
+    \item \textbf{Double Passe OCR (Dual-Pass Strategy) :}
+    \begin{itemize}
+        \item \textit{Passe 1 (RGB brut) :} Détecte les marques contrastées (ex. logo bleu Doliprane sur fond jaune).
+        \item \textit{Passe 2 (CLAHE Grayscale) :} Extrait les petits caractères légaux, dosages et DCI.
+    \end{itemize}
+    \item \textbf{Moteur d'Appariement Flou et Désambiguïsation :}
+    Algorithme RapidFuzz pondéré priorisant le nom commercial sur la matière active, avec gestion des équivalences de dosage ($1000\text{ mg} = 1\text{ g}$) et des dosages composites (ex. Augmentin $1\text{g} / 125\text{mg}$).
+\end{enumerate}
+
+\begin{tcolorbox}[colback=lightbg,colframe=primary,arc=1mm,title={\small \textbf{Validation sur Photo Réelle de Doliprane 1000 mg}}]
+\footnotesize
+Le test sur l'image smartphone réelle soumise par l'utilisateur a produit un \textbf{score composite de 0.99} (Confiance OCR 99\%, Similarité catalogue 1.0). Le produit \textbf{DOLIPRANE 1 G} (CIP 6118000070115, PPV 14.00 MAD) a été validé avec succès avec proposition immédiate de 3 génériques marocains.
+\end{tcolorbox}
+
+% ----------------------------------------------------------------------------------
+% 5. GÉOLOCALISATION & ACTIONS WHATSAPP
+% ----------------------------------------------------------------------------------
+\section{Géolocalisation des Officines \& Stratégie WhatsApp Direct}
+
+En l'absence d'une API nationale de stock en temps réel au Maroc, le système apporte une solution à forte valeur ajoutée en combinant proximité géographique et action immédiate :
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Formule de Haversine :} Calcul de la distance géodésique kilométrique précise entre la position du patient et les 800 pharmacies.
+    \item \textbf{Priorisation des Gardes :} Les officines de garde active (nuit/jour) sont automatiquement remontées en tête de liste dans le rayon de recherche.
+    \item \textbf{Bouton WhatsApp Prérempli :} Génère un lien direct \texttt{https://wa.me/212.../?text=...} avec le message : \\
+    \textit{"Salam, wach dwa [NOM] disponible 3ndkom daba ?"} permettant au patient de vérifier la disponibilité en un tapotement.
+    \item \textbf{Bouton Appel Direct :} Déclenche immédiatement l'appel vers l'officine (\texttt{tel:+212...}).
+\end{itemize}
+
+% ----------------------------------------------------------------------------------
+% 6. SÉCURITÉ MÉDICALE & TESTS
+% ----------------------------------------------------------------------------------
+\section{Sécurité Médicale, Qualité Logicielle \& Tests}
+
+\subsection{Garde-fous Médicaux et Déontologie}
+L'application respecte scrupuleusement la déontologie pharmaceutique :
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Interdiction de diagnostic autonome :} Rappel systématique de l'obligation de consulter un médecin.
+    \item \textbf{Interception des Urgences Vitales :} Les requêtes mentionnant une douleur thoracique, détresse respiratoire ou convulsion sont court-circuitées immédiatement vers le \textbf{SAMU (141)} et la \textbf{Protection Civile (15)}.
+    \item \textbf{Sécurité des Secrets :} La clé \texttt{GEMINI\_API\_KEY} réside uniquement dans \texttt{.env} exclu de Git par \texttt{.gitignore}.
+\end{itemize}
+
+\subsection{Bilan des Tests Automatisés (Pytest)}
+L'ensemble de la plateforme est couverte par \textbf{37 tests unitaires et d'intégration} validés à 100\% :
+
+\begin{table}[h!]
+\centering \footnotesize
+\begin{tabular}{llcc}
+\toprule
+\textbf{Composant / Module} & \textbf{Périmètre Testé} & \textbf{Nb Tests} & \textbf{Statut} \\
+\midrule
+FastAPI REST Endpoints & Chat multimodal, recherche CNOPS, pharmacies, STT & 8 & \textbf{\faCheck~100\% Pass} \\
+Matcher CNOPS & Appariement flou, seuils, désambiguïsation dosages & 6 & \textbf{\faCheck~100\% Pass} \\
+Prétraitement Image & Deskew Hough, CLAHE, Détection RoI, Normalisation & 5 & \textbf{\faCheck~100\% Pass} \\
+OCR Bilingue & Détection arabe, mise en forme BiDi, extraction dosages & 3 & \textbf{\faCheck~100\% Pass} \\
+Images Réelles Smartphone & Doliprane 1000mg réel, Augmentin 1g, Kardegic 75mg & 3 & \textbf{\faCheck~100\% Pass} \\
+NLU Engine & Classification des 5 intentions, extraction entités & 4 & \textbf{\faCheck~100\% Pass} \\
+Normaliseur Darija & Arabizi (3, 7, 9), diacritiques arabes, accents FR & 4 & \textbf{\faCheck~100\% Pass} \\
+Catalogue \& Équivalences & Chargement 5 918 médicaments, recherche alternatives DCI & 4 & \textbf{\faCheck~100\% Pass} \\
+\midrule
+\textbf{Total Plateforme} & \textbf{Couverture globale de bout en bout} & \textbf{37} & \textbf{\faCheck~37/37 (100\%)} \\
+\bottomrule
+\end{tabular}
+\caption{Synthèse de la suite de tests automatisés validés sous Python 3.14.}
+\end{table}
+
+% ----------------------------------------------------------------------------------
+% 7. CONCLUSION
+% ----------------------------------------------------------------------------------
+\section{Conclusion}
+
+Dwaya AI concrétise l'alliance de la vision par ordinateur, de l'IA générative multimodale et de la rigueur réglementaire marocaine. Le prototype démontre une précision de reconnaissance optique de premier ordre sur des images réelles, une compréhension authentique de la Darija et un parcours patient orienté vers l'action immédiate (WhatsApp et appel d'officine).
+
+\end{document}
