@@ -245,12 +245,36 @@ function updateInspector(data) {
     }
 }
 
-async function sendMessage(text) {
-    if (!text || !text.trim()) return;
+let attachedImageFile = null;
 
-    appendMessage('user', text, true);
+async function sendMessage(text) {
+    const hasImage = Boolean(attachedImageFile);
+    const trimmedText = text ? text.trim() : '';
+
+    if (!trimmedText && !hasImage) return;
+
+    // 1. Affichage du message côté utilisateur
+    let userDisplayHtml = '';
+    if (hasImage) {
+        const tempImgUrl = URL.createObjectURL(attachedImageFile);
+        userDisplayHtml = `
+            <div class="space-y-1.5">
+                <img src="${tempImgUrl}" class="max-w-[200px] max-h-[130px] rounded-lg border border-slate-200 shadow-sm object-cover" alt="Boîte envoyée" />
+                ${trimmedText ? `<p>${trimmedText}</p>` : '<p class="text-xs text-slate-500 italic">📷 Identification de cette boîte de médicament...</p>'}
+            </div>
+        `;
+    } else {
+        userDisplayHtml = `<p>${trimmedText}</p>`;
+    }
+
+    appendMessage('user', userDisplayHtml, true);
     userInput.value = '';
 
+    // Réinitialiser la barre de prévisualisation
+    const imageToSend = attachedImageFile;
+    clearAttachedImage();
+
+    // 2. Indicateur de chargement
     const loadingId = 'loading-' + Date.now();
     const loadingDiv = document.createElement('div');
     loadingDiv.id = loadingId;
@@ -260,42 +284,67 @@ async function sendMessage(text) {
             <i class="fa-solid fa-spinner fa-spin"></i>
         </div>
         <div class="bg-slate-100 text-slate-500 rounded-2xl rounded-tl-none p-3 max-w-xs shadow-sm text-xs italic">
-            Analyse NLU & recherche dans le référentiel CNOPS...
+            ${hasImage ? 'Analyse multimodale Gemini & vision CNOPS...' : 'Analyse NLU & recherche dans le référentiel CNOPS...'}
         </div>
     `;
     chatMessages.appendChild(loadingDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
     try {
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: text,
-                lat: currentLat,
-                lng: currentLng
-            })
-        });
+        let response;
+        if (hasImage) {
+            // Envoi multipart/form-data
+            const formData = new FormData();
+            formData.append('message', trimmedText || 'Peux-tu analyser cette boîte de médicament et m\'expliquer ce que c\'est en Darija ?');
+            formData.append('image', imageToSend, imageToSend.name || 'medication.jpg');
+            if (currentLat) formData.append('lat', currentLat);
+            if (currentLng) formData.append('lng', currentLng);
+
+            response = await fetch('/api/chat/multimodal', {
+                method: 'POST',
+                body: formData
+            });
+        } else {
+            // Envoi JSON classique
+            response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: trimmedText,
+                    lat: currentLat,
+                    lng: currentLng
+                })
+            });
+        }
 
         const data = await response.json();
         document.getElementById(loadingId)?.remove();
 
         updateInspector(data);
 
-        let replyHtml = `<p>${data.reply_text}</p>`;
+        // Header du message assistant (avec badge modèle LLM si actif)
+        let modelBadge = '';
+        if (data.is_llm) {
+            modelBadge = `<span class="bg-indigo-100 text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center"><i class="fa-solid fa-sparkles text-indigo-500 mr-1"></i>Gemini Flash (Darija)</span>`;
+        }
+
+        let replyHtml = `
+            ${modelBadge ? `<div class="mb-1.5 flex justify-end">${modelBadge}</div>` : ''}
+            <div class="text-sm leading-relaxed">${formatMarkdownText(data.reply_text)}</div>
+        `;
 
         if (data.matched_drug) {
             const d = data.matched_drug;
             replyHtml += `
-                <div class="mt-2 p-2.5 bg-white border border-teal-200 rounded-xl shadow-xs text-xs">
+                <div class="mt-2.5 p-3 bg-white border border-teal-200 rounded-xl shadow-xs text-xs">
                     <div class="flex justify-between items-start font-bold text-slate-800">
                         <span>💊 ${d.nom}</span>
-                        <span class="text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">${d.ppv.toFixed(2)} DH</span>
+                        <span class="text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 font-mono">${d.ppv.toFixed(2)} DH</span>
                     </div>
                     <div class="text-slate-500 mt-1">DCI : <strong>${d.dci}</strong> (${d.dosage} ${d.unite_dosage || ''})</div>
-                    <div class="text-slate-500">Forme : ${d.forme} - ${d.presentation}</div>
-                    <div class="mt-1 flex items-center space-x-2 text-[11px] text-slate-600">
-                        <span class="bg-slate-100 px-1.5 py-0.5 rounded">${d.princeps_generique}</span>
+                    <div class="text-slate-500">Forme : ${d.forme} ${d.presentation ? '- ' + d.presentation : ''}</div>
+                    <div class="mt-1.5 flex items-center space-x-2 text-[11px] text-slate-600">
+                        <span class="bg-slate-100 px-1.5 py-0.5 rounded font-medium">${d.princeps_generique}</span>
                         <span class="text-emerald-700">Remboursement CNOPS/AMO: ${d.taux_remboursement}</span>
                     </div>
                 </div>
@@ -303,15 +352,15 @@ async function sendMessage(text) {
         }
 
         if (data.alternatives && data.alternatives.length > 0) {
-            replyHtml += `<div class="mt-2 font-semibold text-xs text-purple-800">🔄 Génériques équivalents disponibles :</div><div class="space-y-1 mt-1">`;
+            replyHtml += `<div class="mt-2.5 font-semibold text-xs text-purple-800">🔄 Alternatives & Génériques moins chers au Maroc :</div><div class="space-y-1.5 mt-1">`;
             data.alternatives.slice(0, 3).forEach(alt => {
                 replyHtml += `
                     <div class="p-2 bg-purple-50 border border-purple-200 rounded-lg text-xs flex justify-between items-center">
                         <div>
                             <span class="font-bold text-purple-900">${alt.nom}</span>
-                            <span class="text-slate-500 text-[11px] block">${alt.forme} - ${alt.presentation}</span>
+                            <span class="text-slate-500 text-[11px] block">${alt.forme} - ${alt.presentation || ''}</span>
                         </div>
-                        <span class="font-bold text-purple-800">${alt.ppv.toFixed(2)} DH</span>
+                        <span class="font-bold text-purple-800 font-mono">${alt.ppv.toFixed(2)} DH</span>
                     </div>
                 `;
             });
@@ -319,22 +368,24 @@ async function sendMessage(text) {
         }
 
         if (data.pharmacies && data.pharmacies.length > 0) {
-            replyHtml += `<div class="mt-2 font-semibold text-xs text-blue-800">📍 Officines à proximité (visibles sur la carte) :</div><div class="space-y-1.5 mt-1">`;
+            replyHtml += `<div class="mt-2.5 font-semibold text-xs text-blue-900">📍 Pharmacies à proximité (Gardes & Actions Directes) :</div><div class="space-y-2 mt-1">`;
             data.pharmacies.slice(0, 3).forEach(p => {
-                const isGarde = Boolean(p.garde);
+                const isGarde = Boolean(p.is_garde || p.garde);
                 replyHtml += `
-                    <div class="p-2.5 bg-white border ${isGarde ? 'border-green-300 ring-1 ring-green-200' : 'border-slate-200'} rounded-lg text-xs">
+                    <div class="p-2.5 bg-white border ${isGarde ? 'border-emerald-300 ring-1 ring-emerald-200' : 'border-slate-200'} rounded-lg text-xs shadow-2xs">
                         <div class="flex justify-between items-center">
-                            <span class="font-bold text-slate-800">${p.title}</span>
-                            ${isGarde ? '<span class="bg-green-100 text-green-800 font-bold px-1.5 py-0.5 rounded text-[10px]"><i class="fa-solid fa-moon mr-1"></i>GARDE ACTIVE</span>' : ''}
+                            <span class="font-bold text-slate-800">${p.name || p.title}</span>
+                            ${isGarde ? '<span class="bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded text-[10px]"><i class="fa-solid fa-moon mr-1"></i>GARDE ACTIVE</span>' : ''}
                         </div>
-                        <div class="text-slate-500 text-[11px] mt-0.5">${p.address || p.ville}</div>
-                        <div class="flex justify-between items-center mt-1 text-[11px] text-slate-600">
+                        <div class="text-slate-500 text-[11px] mt-0.5">${p.address || p.city || p.ville || ''}</div>
+                        <div class="flex items-center space-x-2 mt-1 text-[11px] text-slate-500">
                             <span><i class="fa-solid fa-phone text-slate-400 mr-1"></i>${p.phone || 'Non renseigné'}</span>
-                            <span class="text-slate-500 font-mono">${p.distance_km ? p.distance_km + ' km' : p.ville}</span>
-                            <a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" class="text-teal-600 hover:underline">
-                                <i class="fa-solid fa-diamond-turn-right mr-1"></i>Itinéraire
-                            </a>
+                            <span class="font-mono text-teal-700 font-medium">📍 ${p.distance_km ? p.distance_km + ' km' : 'Proche'}</span>
+                        </div>
+                        <div class="mt-2 pt-1.5 border-t border-slate-100 flex items-center gap-1.5">
+                            ${p.phone_url ? `<a href="${p.phone_url}" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-medium flex items-center transition shadow-2xs"><i class="fa-solid fa-phone mr-1"></i>Appeler</a>` : ''}
+                            ${p.whatsapp_url ? `<a href="${p.whatsapp_url}" target="_blank" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-medium flex items-center transition shadow-2xs"><i class="fa-brands fa-whatsapp mr-1"></i>WhatsApp</a>` : ''}
+                            ${p.maps_url ? `<a href="${p.maps_url}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded text-[11px] font-medium flex items-center transition"><i class="fa-solid fa-diamond-turn-right mr-1"></i>Itinéraire</a>` : ''}
                         </div>
                     </div>
                 `;
@@ -356,6 +407,23 @@ async function sendMessage(text) {
         document.getElementById(loadingId)?.remove();
         appendMessage('assistant', `<span class="text-red-500 font-semibold">Erreur de connexion au serveur backend : ${err.message}</span>`, false);
     }
+}
+
+function formatMarkdownText(text) {
+    if (!text) return '';
+    return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\n\n/g, '<br/><br/>')
+        .replace(/\n/g, '<br/>');
+}
+
+function clearAttachedImage() {
+    attachedImageFile = null;
+    const previewBar = document.getElementById('attached-preview-bar');
+    if (previewBar) previewBar.classList.add('hidden');
+    const cameraInput = document.getElementById('camera-input');
+    if (cameraInput) cameraInput.value = '';
 }
 
 function sendQuickMessage(text) {
@@ -450,6 +518,9 @@ async function setupUniversalAudioRecording() {
 function setupCameraAndVision() {
     const cameraBtn = document.getElementById('camera-btn');
     const cameraInput = document.getElementById('camera-input');
+    const cancelAttachBtn = document.getElementById('cancel-attach-btn');
+    const attachedPreviewBar = document.getElementById('attached-preview-bar');
+    const attachedThumb = document.getElementById('attached-thumb');
 
     if (!cameraBtn || !cameraInput) return;
 
@@ -457,11 +528,23 @@ function setupCameraAndVision() {
         cameraInput.click();
     });
 
-    cameraInput.addEventListener('change', async (e) => {
+    if (cancelAttachBtn) {
+        cancelAttachBtn.addEventListener('click', () => {
+            clearAttachedImage();
+        });
+    }
+
+    cameraInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        await uploadAndScanMedicationBox(file);
-        cameraInput.value = '';
+
+        attachedImageFile = file;
+        if (attachedThumb && attachedPreviewBar) {
+            attachedThumb.src = URL.createObjectURL(file);
+            attachedPreviewBar.classList.remove('hidden');
+        }
+        userInput.placeholder = "Posez une question sur cette boîte (ou appuyez sur Entrée)...";
+        userInput.focus();
     });
 }
 

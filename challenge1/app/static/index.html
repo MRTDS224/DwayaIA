@@ -106,13 +106,27 @@
                 </button>
             </div>
 
+            <!-- Prévisualisation de l'image attachée au message -->
+            <div id="attached-preview-bar" class="hidden px-4 py-2 bg-teal-50 border-t border-teal-200 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <img id="attached-thumb" class="w-10 h-10 object-cover rounded-md border border-teal-300 shadow-sm" alt="Aperçu boîte">
+                    <div>
+                        <span class="text-xs font-semibold text-teal-900 block"><i class="fa-solid fa-camera mr-1 text-teal-600"></i>Photo de boîte attachée</span>
+                        <span class="text-[11px] text-teal-700">Posez une question en Darija/Français ou envoyez pour identification</span>
+                    </div>
+                </div>
+                <button type="button" id="cancel-attach-btn" class="text-slate-400 hover:text-red-500 p-1.5 rounded-full hover:bg-white transition" title="Retirer la photo">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
             <!-- Barre de saisie, enregistrement vocal & scan caméra -->
             <div class="p-3 bg-white border-t border-slate-200">
                 <form id="chat-form" class="flex items-center space-x-2">
                     <button type="button" id="voice-btn" class="p-2.5 text-slate-500 hover:text-teal-600 rounded-full hover:bg-slate-100 transition" title="Parler (Reconnaissance Vocale)">
                         <i class="fa-solid fa-microphone text-lg"></i>
                     </button>
-                    <button type="button" id="camera-btn" class="p-2.5 text-slate-500 hover:text-teal-600 rounded-full hover:bg-slate-100 transition" title="Scanner une boîte de médicament (Photo / OCR)">
+                    <button type="button" id="camera-btn" class="p-2.5 text-slate-500 hover:text-teal-600 rounded-full hover:bg-slate-100 transition" title="Attacher une photo de boîte de médicament">
                         <i class="fa-solid fa-camera text-lg"></i>
                     </button>
                     <input type="file" id="camera-input" accept="image/*" class="hidden">
