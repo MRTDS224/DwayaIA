@@ -20,6 +20,7 @@ from challenge1.app.core.nlu_engine import nlu_engine
 from challenge1.app.services.catalog_service import catalog_service
 from challenge1.app.services.pharmacy_service import pharmacy_service
 from challenge1.app.services.audio_service import audio_service
+from challenge2.vision.routes import router as vision_router
 
 app = FastAPI(
     title="Dwaya AI - Assistant Pharmacie Multilingue (Challenge #1)",
@@ -42,6 +43,10 @@ app.add_middleware(
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+# Module Vision & OCR (Challenge #2)
+app.include_router(vision_router)
+app.include_router(vision_router, prefix="/api")
 
 @app.get("/", response_class=HTMLResponse, tags=["Interface Utilisateur"])
 async def serve_ui():
