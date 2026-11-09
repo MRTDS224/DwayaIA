@@ -9,6 +9,7 @@ PROJECT_ROOT = BASE_DIR.parent
 
 DATA_DIR = BASE_DIR / "data"
 MEDICAMENTS_FILE = DATA_DIR / "ref-des-medicaments-cnops-2014.xlsx"
+MEDICAMENTS_JSON_FILE = DATA_DIR / "medicaments_cnops.json"
 PHARMACIES_FILE = DATA_DIR / "pharmacies_maroc.json"
 
 # Coordonnées par défaut (Casablanca) si aucune localisation n'est spécifiée

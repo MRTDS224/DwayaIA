@@ -4,10 +4,11 @@ Utilise RapidFuzz avec un algorithme 2-Tier :
 - Tier 1 : Recherche floue directe sur les noms de marque (Ratio & Partial Ratio)
 - Tier 2 : Filtrage / Boost conjoint sur le dosage (500mg, 1000mg, etc.) et la forme
 """
+import json
 import openpyxl
 from rapidfuzz import process, fuzz
 from typing import List, Optional, Dict
-from challenge1.app.config import MEDICAMENTS_FILE
+from challenge1.app.config import MEDICAMENTS_FILE, MEDICAMENTS_JSON_FILE
 from challenge1.app.core.normalizer import normalize_query
 
 class CatalogService:
@@ -19,9 +20,19 @@ class CatalogService:
         self._load_data()
 
     def _load_data(self):
-        """Charge le catalogue Excel CNOPS en mémoire (5 918 médicaments)."""
+        """Charge le catalogue CNOPS en mémoire (priorité au JSON pour le Cloud, sinon Excel)."""
+        if MEDICAMENTS_JSON_FILE.exists():
+            try:
+                with open(MEDICAMENTS_JSON_FILE, "r", encoding="utf-8") as f:
+                    self.drugs = json.load(f)
+                self._index_data()
+                print(f"[✓] Catalogue CNOPS chargé depuis JSON : {len(self.drugs)} médicaments indexés.")
+                return
+            except Exception as e:
+                print(f"[!] Erreur lecture JSON CNOPS ({e}), tentative depuis Excel...")
+
         if not MEDICAMENTS_FILE.exists():
-            print(f"[!] Fichier de référence non trouvé: {MEDICAMENTS_FILE}")
+            print(f"[!] Fichier de référence non trouvé: {MEDICAMENTS_FILE} ni {MEDICAMENTS_JSON_FILE}")
             return
 
         wb = openpyxl.load_workbook(MEDICAMENTS_FILE, read_only=True, data_only=True)
@@ -57,11 +68,11 @@ class CatalogService:
                 prix_br = float(r[9]) if r[9] is not None else 0.0
             except:
                 prix_br = 0.0
+            
+            princeps_gen = str(r[10]).strip() if len(r) > 10 and r[10] else "Princeps"
+            remb = str(r[11]).strip() if len(r) > 11 and r[11] else "70%"
 
-            pg = str(r[10]).strip() if r[10] else "P"
-            taux = str(r[11]).strip() if r[11] else "0%"
-
-            item = {
+            drug_item = {
                 "code": code,
                 "nom": nom,
                 "dci": dci,
@@ -72,21 +83,31 @@ class CatalogService:
                 "ppv": ppv,
                 "ph": ph,
                 "prix_br": prix_br,
-                "princeps_generique": "Princeps" if pg.upper() == "P" else "Générique",
-                "taux_remboursement": taux,
+                "princeps_generique": princeps_gen,
+                "taux_remboursement": remb
             }
+            self.drugs.append(drug_item)
 
-            self.drugs.append(item)
-            self.drugs_by_code[code] = item
+        self._index_data()
+        print(f"[✓] Catalogue CNOPS chargé en mémoire : {len(self.drugs)} médicaments indexés.")
 
+    def _index_data(self):
+        """Indexe les médicaments par code CIP et par DCI pour des lookups O(1)."""
+        self.drugs_by_code.clear()
+        self.drugs_by_dci.clear()
+        self.drug_names_lower.clear()
+
+        for drug in self.drugs:
+            code = drug["code"]
+            self.drugs_by_code[code] = drug
+            dci = drug.get("dci", "").strip().upper()
             dci_key = normalize_query(dci)
             if dci_key:
                 if dci_key not in self.drugs_by_dci:
                     self.drugs_by_dci[dci_key] = []
-                self.drugs_by_dci[dci_key].append(item)
+                self.drugs_by_dci[dci_key].append(drug)
 
         self.drug_names_lower = [d["nom"].lower() for d in self.drugs]
-        print(f"[✓] Catalogue CNOPS chargé en mémoire : {len(self.drugs)} médicaments indexés.")
 
     def search(self, query: str, limit: int = 5, min_score: float = 40.0) -> List[Dict]:
         """
